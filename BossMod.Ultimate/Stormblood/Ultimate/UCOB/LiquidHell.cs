@@ -81,8 +81,9 @@ class P1LiquidHell : LiquidHell
                 // encourage baiter to stay on the opposite half of the arena, because it tends to walk itself into a corner otherwise
                 hints.AddForbiddenZone(ShapeDistance.InvertedCone(Module.PrimaryActor.Position, 50, Module.PrimaryActor.DirectionTo(Arena.Center).ToAngle(), 45.Degrees()), DateTime.MaxValue);
 
+                var center = Arena.Center;
                 // encourage baiter to stay on arena edge if possible
-                hints.GoalZones.Add(p => p.InDonut(Arena.Center, 18, 22) ? 0.1f : 0);
+                hints.GoalZones.Add(p => p.InDonut(center, 18, 22) ? 0.1f : 0);
 
                 // don't drop on neurolinks
                 foreach (var nl in Module.Enemies(OID.Neurolink))
@@ -99,7 +100,7 @@ class P1LiquidHell : LiquidHell
                 hints.AddForbiddenZone(ShapeDistance.Circle(Module.PrimaryActor.Position, 6), NextCast);
 
                 foreach (var p in Raid.WithoutSlot().Exclude(actor))
-                    hints.AddForbiddenZone(ShapeDistance.Circle(p.Position, 0.5f), DateTime.MaxValue);
+                    hints.AddForbiddenZone(ShapeDistance.Circle(p.Position, 1), DateTime.MaxValue);
             }
 
             if (actor == Baiter && Module.FindComponent<P1Fireball>()?.Destination is { } dest && dest != default)

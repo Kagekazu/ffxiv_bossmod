@@ -11,6 +11,8 @@ class P3QuickmarchTrio(BossModule module) : BossComponent(module)
     private bool _divesDone;
     private bool _earthshakersDone;
 
+    public bool PuddleDodgeHint;
+
     public override void DrawArenaForeground(int pcSlot, Actor pc)
     {
         if (Active)
@@ -55,6 +57,9 @@ class P3QuickmarchTrio(BossModule module) : BossComponent(module)
 
         if (Module.FindComponent<P3Twister>() is { Predicted: true } or { Active: true } && _spreadSpots[slot] != default)
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(_spreadSpots[slot], 1));
+
+        if (PuddleDodgeHint)
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Arena.Center, 13));
 
         if (_earthshakersDone && actor.InstanceID != ((UCOB)Module).BahamutPrime()?.TargetID)
             hints.AddForbiddenZone(ShapeDistance.HalfPlane(Arena.Center, (Arena.Center - RelativeNorth).Normalized()), DateTime.MaxValue);
@@ -285,9 +290,16 @@ class P3TempestWing(BossModule module) : Components.TankbusterTether(module, AID
         }
         else
         {
-            // non tanks need to avoid stealing tethers
-            foreach (var side in Tethers.Where(t => t.Player.Role == Role.Tank))
-                hints.AddForbiddenZone(ShapeDistance.Rect(side.Enemy.Position, side.Player.Position, 1), TetherDeadline);
+            foreach (var side in Tethers)
+            {
+                // don't steal from tank
+                if (side.Player.Role == Role.Tank)
+                    hints.AddForbiddenZone(ShapeDistance.Rect(side.Enemy.Position, side.Player.Position, 1), TetherDeadline);
+
+                // don't move too close to source, or tank will be unable to grab tether
+                if (side.Player == actor)
+                    hints.AddForbiddenZone(ShapeDistance.Circle(side.Enemy.Position, 2));
+            }
 
             if (EnableRaidHints)
             {
