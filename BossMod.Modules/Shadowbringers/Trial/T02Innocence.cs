@@ -57,7 +57,8 @@ public enum TetherID : uint
     HolySword = 88, // ForgivenVenery2->ForgivenShame2
 }
 
-class Enthrall(BossModule module) : Components.RaidwideCast(module, AID.Enthrall);
+class Enthrall(BossModule module) : Components.CastGaze(module, AID.Enthrall);
+class Realmrazer(BossModule module) : Components.RaidwideCast(module, AID.Realmrazer);
 class DaybreakAOE(BossModule module) : Components.StandardAOEs(module, AID.DaybreakAOE, 6);
 class ScoldsBridle(BossModule module) : Components.RaidwideCast(module, AID.ScoldsBridle);
 class HolySword(BossModule module) : Components.SingleTargetCast(module, AID.HolySword);
@@ -68,8 +69,8 @@ class HolyTrinity(BossModule module) : Components.StandardAOEs(module, AID.HolyT
 class ReprobationLine(BossModule module) : Components.StandardAOEs(module, AID.ReprobationLine, new AOEShapeRect(21, 2));
 class ReprobationLong(BossModule module) : Components.StandardAOEs(module, AID.ReprobationLong, new AOEShapeRect(42, 2));
 class GodRayCone(BossModule module) : Components.StandardAOEs(module, AID.GodRayCone, new AOEShapeCone(5, 50.Degrees()));
-class GodRayDonut1(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut1, new AOEShapeDonut(5, 10));
-class GodRayDonut2(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut2, new AOEShapeDonut(10, 20));
+class GodRayDonut1(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut1, new AOEShapeDonutSector(5, 10, 50.Degrees()));
+class GodRayDonut2(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut2, new AOEShapeDonutSector(10, 20, 50.Degrees()));
 class BeatificVision(BossModule module) : Components.StandardAOEs(module, AID.BeatificVision, new AOEShapeRect(45, 20));
 class Shadowreaver(BossModule module) : Components.RaidwideCast(module, AID.Shadowreaver);
 class Manacle(BossModule module) : Components.StandardAOEs(module, AID.Manacle, 6);
@@ -92,6 +93,7 @@ class T02InnocenceStates : StateMachineBuilder
     {
         SimpleState(id, 10000, "P2")
             .ActivateOnEnter<Enthrall>()
+            .ActivateOnEnter<Realmrazer>()
             .ActivateOnEnter<DaybreakAOE>()
             .ActivateOnEnter<ScoldsBridle>()
             .ActivateOnEnter<HolySword>()

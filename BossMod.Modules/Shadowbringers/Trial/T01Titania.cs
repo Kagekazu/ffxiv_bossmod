@@ -60,7 +60,7 @@ class LeafstormRepeat(BossModule module) : Components.StandardAOEs(module, AID.L
 class PucksCaprice(BossModule module) : Components.RaidwideCast(module, AID.PucksCaprice);
 class PucksBreath(BossModule module) : Components.StackWithCastTargets(module, AID.PucksBreath, 6);
 class PucksRebukeNear(BossModule module) : Components.StandardAOEs(module, AID.PucksRebukeNear, 5);
-class PucksRebuke(BossModule module) : Components.KnockbackFromCastTarget(module, AID.PucksRebuke, 15);
+class PucksRebuke(BossModule module) : Components.KnockbackFromCastTarget(module, AID.PucksRebuke, 10);
 class DivinationRune(BossModule module) : Components.BaitAwayCast(module, AID.DivinationRune, new AOEShapeCone(60, 45.Degrees()));
 class BrightSabbath(BossModule module) : Components.RaidwideCast(module, AID.BrightSabbath);
 class PhantomRuneIn(BossModule module) : Components.StandardAOEs(module, AID.PhantomRuneIn, 10);

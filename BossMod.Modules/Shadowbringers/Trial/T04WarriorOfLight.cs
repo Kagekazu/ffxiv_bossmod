@@ -20,8 +20,8 @@ public enum AID : uint
 {
     AutoAttack = 872, // Boss/BossP2->player, no cast, single-target
     AbsoluteHoly = 20237, // Helper->self, no cast, range 6 circle
-    AbsoluteBlizzardIIIHit = 20238, // Helper->self, no cast, range 70 circle stay
-    AbsoluteFireIIIHit = 20239, // Helper->self, no cast, range 70 circle move
+    AbsoluteBlizzardIIIHit = 20238, // Helper->self, no cast, range 70 circle
+    AbsoluteFireIIIHit = 20239, // Helper->self, no cast, range 70 circle, Pyretic
     CoruscantSaberIn = 20240, // Boss->self, 7.0s cast, range 10 circle
     CoruscantSaberOut = 20241, // Boss->self, 7.0s cast, range 5-60 donut
     ImbuedAbsoluteFireIII = 20242, // Boss/BossP2->self, 3.0s cast, single-target
@@ -68,6 +68,17 @@ public enum AID : uint
     UltimateCrossoverAOE = 21628, // Helper->self, 6.0s cast, range 60 circle
 }
 
+public enum SID : uint
+{
+    Pyretic = 960, // Helper->player
+    ImbuedSaber = 2377, // Boss->Boss
+}
+
+public enum IconID : uint
+{
+    Stack = 161, // player
+}
+
 class CoruscantSaberIn(BossModule module) : Components.StandardAOEs(module, AID.CoruscantSaberIn, 10);
 class CoruscantSaberOut(BossModule module) : Components.StandardAOEs(module, AID.CoruscantSaberOut, new AOEShapeDonut(5, 60));
 class ImbuedCoruscanceIn(BossModule module) : Components.StandardAOEs(module, AID.ImbuedCoruscanceIn, 10);
@@ -84,27 +95,61 @@ class RadiantSacrament(BossModule module) : Components.StandardAOEs(module, AID.
 class Ascendance(BossModule module) : Components.RaidwideCast(module, AID.Ascendance);
 class UltimateCrossoverAOE(BossModule module) : Components.RaidwideCast(module, AID.UltimateCrossoverAOE);
 
+class AbsoluteHoly(BossModule module) : Components.StackWithIcon(module, (uint)IconID.Stack, AID.AbsoluteHoly, 6, 5.1f);
+
 class AbsoluteFireIce(BossModule module) : Components.StayMove(module)
 {
+    private Requirement _imbued;
+
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var req = (AID)spell.Action.ID switch
+        switch ((AID)spell.Action.ID)
         {
-            AID.AbsoluteFireIII or AID.ImbuedAbsoluteFireIII => Requirement.Move,
-            AID.AbsoluteBlizzardIII or AID.ImbuedAbsoluteBlizzardIII => Requirement.Stay,
-            _ => Requirement.None
-        };
-        if (req == Requirement.None)
-            return;
-        var act = Module.CastFinishAt(spell);
-        foreach (var (i, _) in Raid.WithSlot(true))
-            SetState(i, new(req, act));
+            case AID.AbsoluteFireIII:
+                Apply(Requirement.Stay, Module.CastFinishAt(spell));
+                break;
+            case AID.AbsoluteBlizzardIII:
+                Apply(Requirement.NoMove, Module.CastFinishAt(spell));
+                break;
+            case AID.ImbuedAbsoluteFireIII:
+                _imbued = Requirement.Stay;
+                break;
+            case AID.ImbuedAbsoluteBlizzardIII:
+                _imbued = Requirement.NoMove;
+                break;
+            case AID.ImbuedCoruscanceIn:
+            case AID.ImbuedCoruscanceOut:
+                if (_imbued != Requirement.None)
+                    Apply(_imbued, Module.CastFinishAt(spell));
+                break;
+        }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID is AID.AbsoluteFireIIIHit or AID.AbsoluteBlizzardIIIHit)
+        {
             Array.Fill(PlayerStates, default);
+            _imbued = Requirement.None;
+        }
+    }
+
+    public override void OnStatusGain(Actor actor, in ActorStatus status)
+    {
+        if ((SID)status.ID == SID.Pyretic)
+            SetState(Raid.FindSlot(actor.InstanceID), new(Requirement.Stay, status.ExpireAt, 1));
+    }
+
+    public override void OnStatusLose(Actor actor, in ActorStatus status)
+    {
+        if ((SID)status.ID == SID.Pyretic)
+            ClearState(Raid.FindSlot(actor.InstanceID), 1);
+    }
+
+    private void Apply(Requirement req, DateTime act)
+    {
+        foreach (var (i, _) in Raid.WithSlot(true))
+            SetState(i, new(req, act));
     }
 }
 
@@ -134,6 +179,7 @@ class T04WarriorOfLightStates : StateMachineBuilder
         .ActivateOnEnter<TerrorUnleashed>()
         .ActivateOnEnter<SolemnConfiteor>()
         .ActivateOnEnter<RadiantSacrament>()
+        .ActivateOnEnter<AbsoluteHoly>()
         .ActivateOnEnter<AbsoluteFireIce>()
         .ActivateOnEnter<SpectralAdds>()
         .ActivateOnEnter<Ascendance>();
