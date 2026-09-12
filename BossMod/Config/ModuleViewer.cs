@@ -174,7 +174,7 @@ public sealed class ModuleViewer : IDisposable
 
     private void DrawSearchBar()
     {
-        ImGui.InputTextWithHint("##search", "e.g. \"Ultimate\"", ref _searchText, 100, ImGuiInputTextFlags.CallbackCompletion);
+        ImGui.InputTextWithHint("##search", "e.g. \"Ultimate\"", ref _searchText, 100);
 
         if (ImGui.IsItemHovered() && !ImGui.IsItemFocused())
         {

@@ -408,7 +408,7 @@ class T02EverkeepStates : StateMachineBuilder
     }
 }
 
-[ModuleInfo(Contributors = "Gabriel Deleon", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 995, NameID = 12881)]
+[ModuleInfo(Contributors = "Gabriel Deleon, Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 995, NameID = 12881)]
 public class T02Everkeep(WorldState ws, Actor primary) : BossModule(ws, primary, new(100, 100), NormalBounds)
 {
     public static readonly ArenaBoundsRect NormalBounds = new(20, 20, 45.Degrees());
