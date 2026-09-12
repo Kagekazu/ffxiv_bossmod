@@ -100,9 +100,13 @@ class P1CyclonicBreakAIBait(BossModule module) : BossComponent(module)
         var clockspot = _config.P1CyclonicBreakSpots[assignment];
         if (clockspot < 0 || _spreadStack == null || !_spreadStack.Active)
             return; // no assignment
-        var assignedDirection = (180 - 45 * clockspot).Degrees();
-        // TODO: think about melee vs ranged distance...
-        hints.AddForbiddenZone(ShapeDistance.InvertedRect(Module.PrimaryActor.Position, assignedDirection, 15, -5, 1), _spreadStack.Activation);
+        var origin = Module.PrimaryActor.Position;
+        var dir = (180 - 45 * clockspot).Degrees().ToDirection();
+        // pin immediately so Pathfind actually walks during the cast (activation is protean 2, ~9s out)
+        var dist = _spreadStack.Spreads.Count > 0
+            ? (FRU.StandsRanged(assignment, actor) ? 14f : 9f) // 6y spreads: melee inner, ranged outer
+            : 7f; // pairs: same ring so adjacent support/DD clocks are in stack range
+        hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin + dist * dir, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
     }
 }
 
@@ -127,24 +131,25 @@ class P1CyclonicBreakAIDodgeSpreadStack(BossModule module) : BossComponent(modul
         var dodgeCCW = _spreadStack.Stacks.Count > 0 ? _config.P1CyclonicBreakStackSupportsCCW == isSupport : isSupport ? _config.P1CyclonicBreakSpreadSupportsCCW : _config.P1CyclonicBreakSpreadDDCCW;
         var assignedDirection = (180 - 45 * clockspot).Degrees();
         var safeAngles = _forbiddenDirections.NextAllowed(assignedDirection, dodgeCCW);
-        var (rangeMin, rangeMax) = _spreadStack.Stacks.Count > 0 ? (4, 10) : assignment is PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.OT or PartyRolesConfig.Assignment.M1 or PartyRolesConfig.Assignment.M2 ? (3, 6) : (7, 15);
+        var (rangeMin, rangeMax) = _spreadStack.Stacks.Count > 0
+            ? (4f, 10f)
+            : FRU.StandsRanged(assignment, actor) ? (13f, 18f) : (8f, 11f);
         var safeZone = ShapeDistance.DonutSector(_forbiddenDirections.Center, rangeMin, rangeMax, (safeAngles.min + safeAngles.max) * 0.5f, (safeAngles.max - safeAngles.min) * 0.5f);
         hints.AddForbiddenZone(p => -safeZone(p), _spreadStack.Activation);
 
-        // micro adjusts if activation is imminent
-        if (_spreadStack.Activation < WorldState.FutureTime(0.5f))
+        if (_spreadStack.Stacks.Count > 0)
         {
-            if (_spreadStack.Stacks.Count > 0)
+            if (_spreadStack.Activation < WorldState.FutureTime(0.5f))
             {
                 var closestPartner = Module.Raid.WithoutSlot().Where(p => p.Class.IsSupport() != isSupport).Closest(actor.Position);
                 if (closestPartner != null)
                     hints.AddForbiddenZone(ShapeDistance.InvertedCircle(closestPartner.Position, _spreadStack.StackRadius), _spreadStack.Activation);
             }
-            else
-            {
-                foreach (var p in Raid.WithoutSlot().Exclude(actor))
-                    hints.AddForbiddenZone(ShapeDistance.Circle(p.Position, _spreadStack.SpreadRadius), _spreadStack.Activation);
-            }
+        }
+        else
+        {
+            foreach (var p in Raid.WithoutSlot().Exclude(actor))
+                hints.AddForbiddenZone(ShapeDistance.Circle(p.Position, _spreadStack.SpreadRadius), _spreadStack.Activation);
         }
     }
 }

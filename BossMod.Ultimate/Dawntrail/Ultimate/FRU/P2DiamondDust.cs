@@ -219,10 +219,25 @@ class P2HeavenlyStrike(BossModule module) : Components.Knockback(module, AID.Hea
         yield return new(Module.Center, 12, _activation);
     }
 
+    public override bool DestinationUnsafe(int slot, Actor actor, WPos pos)
+    {
+        if (base.DestinationUnsafe(slot, actor, pos))
+            return true;
+        var icicle = Module.FindComponent<P2IcicleImpact>();
+        if (icicle != null)
+            foreach (var aoe in icicle.ActiveAOEs(slot, actor))
+                if (aoe.Check(pos))
+                    return true;
+        return false;
+    }
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (_safeDirs[slot] != default)
-            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(Module.Center + 6 * _safeDirs[slot], new(1, 0), Module.Bounds.MapResolution, actor.Position, 0.25f), _activation);
+        if (_safeDirs[slot] == default)
+            return;
+        // pin immediately: using knockback time as activation gives melee-greed leeway to walk toward the boss,
+        // which rotates the knockback ray into ice/wall
+        hints.AddForbiddenZone(ShapeDistance.PrecisePosition(Module.Center + 6 * _safeDirs[slot], new(1, 0), Module.Bounds.MapResolution, actor.Position, 0.25f));
     }
 
     public override void DrawArenaForeground(int pcSlot, Actor pc)

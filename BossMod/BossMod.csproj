@@ -33,16 +33,22 @@
     <ProjectReference Include="..\..\cs\InteropGenerator.Runtime\InteropGenerator.Runtime.csproj" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+  <!-- Debug mock UI needs a sibling DalaMock checkout. Without it, Debug still builds the in-game plugin DLL. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' AND Exists('..\..\DalaMock\DalaMock\DalaMock.Core.csproj')">
     <OutputType>Exe</OutputType>
+    <HasLocalDalaMock>true</HasLocalDalaMock>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+  <ItemGroup Condition="'$(HasLocalDalaMock)' == 'true'">
     <AssemblyAttribute Include="DalamudLibPath">
       <_Parameter1>$(DalamudLibPath)</_Parameter1>
     </AssemblyAttribute>
     <ProjectReference Include="..\..\DalaMock\DalaMock\DalaMock.Core.csproj" />
     <!-- <PackageReference Include="DalaMock.Core" Version="6.1.8" /> -->
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug' AND '$(HasLocalDalaMock)' != 'true'">
+    <Compile Remove="Framework\Program.cs" />
   </ItemGroup>
 
   <ItemGroup>

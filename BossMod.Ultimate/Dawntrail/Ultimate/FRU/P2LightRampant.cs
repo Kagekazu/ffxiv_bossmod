@@ -253,9 +253,38 @@ class P2HouseOfLightBoss(BossModule module) : Components.GenericBaitAway(module,
     }
 }
 
+// double-conga before tethers: supports N, DPS S, corners pinched toward the other line
+class P2LightRampantAIPrepos(BossModule module) : BossComponent(module)
+{
+    private readonly FRUConfig _config = Service.Config.Get<FRUConfig>();
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        var prio = _config.P2LightRampantAssignment[assignment];
+        if (prio < 0)
+            return;
+
+        var puddles = Module.FindComponent<P2LuminousHammer>();
+        if (puddles?.ActiveBaitsOn(actor).Any() == true)
+            return; // bait spots are handled by P2LightRampantAITowers
+
+        var towers = Module.FindComponent<P2BrightHunger1>();
+        if (towers != null && towers.Towers.Any(t => !t.ForbiddenSoakers[slot]))
+            return; // assigned tower is handled by P2LightRampantAITowers
+
+        // 4 spots on a 90° arc (west to east); activation is now so melee greed cannot stay on the boss
+        var south = prio >= 4;
+        var indexInCamp = prio & 3; // 0 = west
+        var dir = south ? (-45 + indexInCamp * 30).Degrees() : (225 - indexInCamp * 30).Degrees();
+        var dest = Module.Center + 7.5f * dir.ToDirection();
+        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), WorldState.CurrentTime);
+    }
+}
+
 // movement to soak towers and bait first 3 puddles (third puddle is baited right before towers resolve)
 class P2LightRampantAITowers(BossModule module) : BossComponent(module)
 {
+    private readonly FRUConfig _config = Service.Config.Get<FRUConfig>();
     private readonly P2LuminousHammer? _puddles = module.FindComponent<P2LuminousHammer>();
     private readonly P2BrightHunger1? _towers = module.FindComponent<P2BrightHunger1>();
 
@@ -276,21 +305,9 @@ class P2LightRampantAITowers(BossModule module) : BossComponent(module)
                 if (partner == null)
                     return; // we can't resolve the hint without knowing the partner
 
-                // logic:
-                // - if actor and partner are north and south, stay on current side
-                // - if both are on the same side, the 'more clockwise' one (NE/SW) moves to the opposite side
-                // TODO: last rule is fuzzy in practice, see if we can adjust better
-                var north = actor.Position.Z < Module.Center.Z;
-                if (north == (partner.Position.Z < Module.Center.Z))
-                {
-                    // same side, see if we need to swap
-                    var moreRight = actor.Position.X > partner.Position.X;
-                    var moreCW = north == moreRight;
-                    north ^= moreCW;
-                }
-
+                var north = FirstBaitNorth(assignment, actor, partner);
                 var preposSpot = Module.Center + new WDir(0, north ? -BaitOffset : BaitOffset);
-                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(preposSpot, 1), bait.Activation);
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(preposSpot, 1), WorldState.CurrentTime);
             }
             else
             {
@@ -313,6 +330,28 @@ class P2LightRampantAITowers(BossModule module) : BossComponent(module)
             }
             // else: we either have no towers assigned (== doing puddles), or have multiple assigned (== assignments failed), so do nothing
         }
+    }
+
+    // leftmost baiter starts north if both puddles are on the same conga line, otherwise bait on your side
+    private bool FirstBaitNorth(PartyRolesConfig.Assignment assignment, Actor actor, Actor partner)
+    {
+        var myPrio = _config.P2LightRampantAssignment[assignment];
+        var partnerPrio = PartnerPrio(partner);
+        if (myPrio < 0 || partnerPrio < 0)
+            return actor.Position.X <= partner.Position.X;
+
+        var mySouth = myPrio >= 4;
+        if (mySouth == partnerPrio >= 4)
+            return (myPrio & 3) < (partnerPrio & 3); // same side: leftmost goes north
+        return !mySouth; // opposite sides: stay on your line
+    }
+
+    private int PartnerPrio(Actor partner)
+    {
+        if (!Raid.TryFindSlot(partner.InstanceID, out var slot))
+            return -1;
+        var roles = Service.Config.Get<PartyRolesConfig>();
+        return _config.P2LightRampantAssignment[roles[Raid.Members[slot].ContentId]];
     }
 }
 

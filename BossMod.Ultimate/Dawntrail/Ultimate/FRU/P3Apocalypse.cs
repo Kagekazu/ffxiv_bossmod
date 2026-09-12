@@ -452,7 +452,17 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
         }
 
         var destOff = distance * (midDir - _apoc.Rotation).ToDirection();
-        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + destOff, 1), DateTime.MaxValue);
+        var dest = Module.Center + destOff;
+        if (distance >= 19)
+        {
+            // same as P4 Somber Dance: MaxValue + greed stays on the boss instead of becoming farthest
+            hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+        }
+        else
+        {
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), DateTime.MaxValue);
+        }
     }
 }
 

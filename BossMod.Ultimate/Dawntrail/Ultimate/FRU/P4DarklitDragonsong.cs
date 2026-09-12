@@ -331,15 +331,54 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (assignment == (_config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT))
+        if (_source == null)
+            return;
+
+        var isBaiter = assignment == (_config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT);
+        var origin = _source.Position;
+        // no activation time: melee greed would otherwise stay on the boss until the tank is already farthest/closest
+        if (NumCasts == 0)
         {
-            // go far east/west
-            var pos = Module.Center + new WDir(actor.Position.X > Module.Center.X ? 19 : -19, 0);
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(pos, 1), _activation);
+            if (isBaiter)
+            {
+                // hug the real wall so a ranged at max range is not still farther than a 19y pin
+                hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
+                var side = actor.Position.X >= Module.Center.X ? 1 : -1;
+                var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
+                hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+                var farthest = Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Farthest(origin);
+                if (farthest != null)
+                {
+                    var r = farthest.DistanceToPoint(origin);
+                    if (r < (dest - origin).Length() - 0.25f)
+                        hints.AddForbiddenZone(ShapeDistance.Circle(origin, r));
+                }
+            }
+            else if (FRU.StandsRanged(assignment, actor))
+            {
+                // stay out of melee but still closer than the wall bait
+                hints.AddForbiddenZone(ShapeDistance.Circle(origin, 12));
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(origin, 16));
+            }
+            else
+            {
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(origin, 8));
+            }
+        }
+        else if (isBaiter)
+        {
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+            var closest = Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Closest(origin);
+            if (closest != null)
+            {
+                var r = closest.DistanceToPoint(origin);
+                if (r > 1)
+                    hints.AddForbiddenZone(ShapeDistance.Donut(origin, r, 100));
+            }
         }
         else
         {
-            base.AddAIHints(slot, actor, assignment, hints);
+            hints.AddForbiddenZone(ShapeDistance.Circle(origin, 10));
         }
     }
 

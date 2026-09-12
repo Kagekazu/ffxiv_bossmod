@@ -2,9 +2,42 @@
 
 class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(module, AID.WingsDarkAndLightExplosion)
 {
+    private readonly FRUConfig _config = Service.Config.Get<FRUConfig>();
+    private WDir _southDir;
+
+    public WDir RelSouth => _southDir;
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        // TODO: implement hints for non-tanks here...
+        if (actor.Role == Role.Tank || Towers.Count == 0 || _southDir == default)
+            return;
+
+        var group = _config.P5ParadiseRegainedAssignments[assignment];
+        var assigned = Towers.FindIndex(t => !t.ForbiddenSoakers[slot]);
+        // left/right towers sit in the first cleave; soak those only after south resolves
+        var canSoak = assigned >= 0 && (group <= 0 || NumCasts > 0);
+        if (canSoak)
+        {
+            ref var t = ref Towers.Ref(assigned);
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(t.Position, 2), t.Activation);
+        }
+        else
+        {
+            foreach (var t in Towers)
+                hints.AddForbiddenZone(ShapeDistance.Circle(t.Position, t.Radius), t.Activation);
+            if (group is 1 or 2)
+            {
+                var south = _southDir.Normalized();
+                var side = group == 1 ? south.OrthoR() : south.OrthoL();
+                // dark (closest tether): stay max melee so OT can sit in the hitbox
+                // light (farthest tether): go in so OT can be farthest
+                var baits = Module.FindComponent<P5ParadiseRegainedBaits>();
+                var dpsIn = baits is { Active: true, TetherClosest: false };
+                // dark: left/right of the south tower at max melee; light: step in so OT can be farthest
+                var dest = Module.Center + (dpsIn ? 3 : 7) * south + (dpsIn ? 2 : 4) * side;
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), WorldState.CurrentTime);
+            }
+        }
     }
 
     public override void OnMapEffect(byte index, uint state)
@@ -17,8 +50,21 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
                 52 => 120.Degrees(),
                 _ => 0.Degrees()
             };
-            var forbidden = Raid.WithSlot(true).WhereActor(p => p.Role == Role.Tank).Mask(); // TODO: assignments
-            Towers.Add(new(Module.Center + 7 * dir.ToDirection(), 3, 2, 2, forbidden, WorldState.FutureTime(9.5f)));
+            var pos = Module.Center + 7 * dir.ToDirection();
+            var group = 0;
+            if (Towers.Count == 0)
+            {
+                _southDir = pos - Module.Center;
+            }
+            else
+            {
+                var delta = (Angle.FromDirection(pos - Module.Center) - Angle.FromDirection(_southDir)).Normalized();
+                group = delta.Rad < 0 ? 1 : 2; // left / right looking from south toward the boss
+            }
+            var tanks = Raid.WithSlot(true).WhereActor(p => p.Role == Role.Tank).Mask();
+            var soakers = _config.P5ParadiseRegainedAssignments.BuildGroupMask(group, Raid) & ~tanks;
+            var forbidden = soakers.Any() ? new BitMask(0xFF) & ~soakers : tanks;
+            Towers.Add(new(pos, 3, 2, 2, forbidden, WorldState.FutureTime(9.5f)));
         }
     }
 
@@ -43,12 +89,15 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
 
 class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(module)
 {
-    private readonly WDir _relSouth = module.FindComponent<P5ParadiseRegainedTowers>() is var towers && towers?.Towers.Count > 0 ? towers.Towers[0].Position - module.Center : default;
+    private readonly WDir _relSouth = module.FindComponent<P5ParadiseRegainedTowers>()?.RelSouth ?? default;
     private Actor? _source;
     private Actor? _firstTarget;
     private AOEShapeCone? _curCleave;
     private DateTime _activation;
     private bool _tetherClosest;
+
+    public bool Active => _source != null;
+    public bool TetherClosest => _tetherClosest;
 
     private static readonly AOEShapeCone _shapeCleaveL = new(19, 120.Degrees(), 60.Degrees()); // note: looks wrong with correct range...
     private static readonly AOEShapeCone _shapeCleaveD = new(19, 120.Degrees(), -60.Degrees());
@@ -91,6 +140,16 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
         {
             // just go to the next safespot
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + SafeOffset(slot, actor), 1));
+        }
+        else
+        {
+            foreach (var b in ActiveBaitsNotOn(actor))
+            {
+                // after the first hit, left/right soakers have to stand in towers on the cleave edge
+                if (NumCasts > 0 && b.Shape is AOEShapeCone)
+                    continue;
+                hints.AddForbiddenZone(b.Shape, BaitOrigin(b), b.Rotation, b.Activation);
+            }
         }
     }
 

@@ -322,6 +322,7 @@ class FRUStates : StateMachineBuilder
     private void P2LightRampant(uint id, float delay)
     {
         ActorCast(id, _module.BossP2, AID.LightRampant, delay, 5, true, "Raidwide (light rampant)")
+            .ActivateOnEnter<P2LightRampantAIPrepos>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorTargetable(id + 0x10, _module.BossP2, false, 3.1f, "Boss disappears")
             .ActivateOnEnter<P2LightRampant>()
@@ -333,6 +334,7 @@ class FRUStates : StateMachineBuilder
         ComponentCondition<P2BrightHunger1>(id + 0x30, 3.3f, comp => comp.NumCasts > 0, "Towers")
             .ActivateOnEnter<P2SinboundHolyVoidzone>()
             .DeactivateOnExit<P2LightRampantAITowers>()
+            .DeactivateOnExit<P2LightRampantAIPrepos>()
             .DeactivateOnExit<P2BrightHunger1>();
         ComponentCondition<P2HolyLightBurst>(id + 0x38, 3.2f, comp => comp.Casters.Count > 0)
             .ActivateOnEnter<P2HolyLightBurst>()

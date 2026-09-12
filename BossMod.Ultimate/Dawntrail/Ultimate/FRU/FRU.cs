@@ -12,6 +12,13 @@ public class FRU(WorldState ws, Actor primary) : BossModule(ws, primary, new(100
 {
     public static readonly ArenaBoundsSquare PathfindHugBorderBounds = new(20); // this is a hack to allow precise positioning near border by some mechanics, TODO reconsider
 
+    public static bool StandsRanged(PartyRolesConfig.Assignment assignment, Actor actor) => assignment switch
+    {
+        PartyRolesConfig.Assignment.H1 or PartyRolesConfig.Assignment.H2 or PartyRolesConfig.Assignment.R1 or PartyRolesConfig.Assignment.R2 => true,
+        PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.OT or PartyRolesConfig.Assignment.M1 or PartyRolesConfig.Assignment.M2 => false,
+        _ => actor.Role is Role.Healer or Role.Ranged
+    };
+
     public override bool ShouldPrioritizeAllEnemies => true;
 
     private Actor? _bossP2;

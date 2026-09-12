@@ -46,12 +46,21 @@ class P1FallOfFaith(BossModule module) : Components.CastCounter(module, default)
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
+        var order = _playerOrder[slot];
+        if (order == 0)
+        {
+            var prio = _config.P1FallOfFaithAssignment[assignment];
+            if (prio >= 0)
+                hints.AddForbiddenZone(ShapeDistance.PrecisePosition(CongaSpot(prio), new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+            return;
+        }
+
         var baitOrder = NextAssignedBaitOrder(slot);
-        if (baitOrder == 0 || _playerOrder[slot] >= 5 && WorldState.CurrentTime < _minHelpMove)
+        if (baitOrder == 0 || order >= 5 && WorldState.CurrentTime < _minHelpMove)
             return;
         var dest = TetherSpot(baitOrder);
-        if (_playerOrder[slot] != baitOrder)
-            dest += BaitOffset(_playerOrder[slot], _fireTethers[baitOrder - 1]);
+        if (order != baitOrder)
+            dest += BaitOffset(order, _fireTethers[baitOrder - 1]);
         hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
     }
 
@@ -135,6 +144,15 @@ class P1FallOfFaith(BossModule module) : Components.CastCounter(module, default)
     }
 
     private bool IsGroupEven(int order) => order is 2 or 4 or 7 or 8;
+
+    // LPDU: west line, H1 (north) to R2 (south); if EW tethers, same order west-to-east on the north line
+    private WPos CongaSpot(int prio)
+    {
+        var index = prio - 3.5f;
+        return _config.P1FallOfFaithEW
+            ? Module.Center + new WDir(index * 2, -8)
+            : Module.Center + new WDir(-8, index * 2);
+    }
 
     private int NextAssignedBaitOrder(int slot)
     {
