@@ -74,7 +74,7 @@ class ChokingGrasp(BossModule module) : Components.StandardAOEs(module, AID.Chok
 
 class JailSafe : BossComponent
 {
-    public const float AbyssY = -200;
+    public const float AbyssY = -100;
     private static readonly WPos MainCenter = new(100, 100);
     private static readonly WDir[] WellOffsets = [
         new(0, -7.4f),
@@ -82,6 +82,12 @@ class JailSafe : BossComponent
         new(15f, -11.5f),
         new(20f, 0),
     ];
+    private static readonly WDir[] WellLandings = [
+        new(-6f, -18f),
+        new(10f, -15f),
+        new(19f, -2f),
+    ];
+    public static readonly ArenaBoundsCustom JailBounds = BuildJailBounds();
     private bool _jailed;
     private WPos _pad;
     private BitMask _wells;
@@ -105,11 +111,10 @@ class JailSafe : BossComponent
         {
             _pad = IslandPad(p);
             _jailed = true;
-            var focus = p.PosRot.Y > -405 ? p.Position : _pad;
-            if ((Arena.Center - focus).LengthSq() > 1)
+            if ((Arena.Center - _pad).LengthSq() > 1 || Arena.Bounds != JailBounds)
             {
-                Arena.Center = focus;
-                Arena.Bounds = new ArenaBoundsCircle(12);
+                Arena.Center = _pad;
+                Arena.Bounds = JailBounds;
             }
             return;
         }
@@ -138,13 +143,6 @@ class JailSafe : BossComponent
         return (known - p.Position).LengthSq() < 625 ? known : p.Position;
     }
 
-    private WPos WellPos(Actor actor)
-    {
-        if (actor.PosRot.Y <= -405)
-            return _pad + WellOffsets[0];
-        return WellOffsets.Skip(1).Select(o => _pad + o).MinBy(w => (w - actor.Position).LengthSq());
-    }
-
     private bool WellReady()
     {
         if (_wells.None())
@@ -169,12 +167,12 @@ class JailSafe : BossComponent
 
     public override void AddHints(int slot, Actor actor, TextHints hints)
     {
-        if (!_jailed || actor.PosRot.Y > -405)
+        if (!_jailed)
             return;
         if (JailAddsAlive(actor))
             hints.Add("Kill the adds!");
-        else if (WellReady() && !actor.Position.InCircle(WellPos(actor), 3))
-            hints.Add("Jump into the well!");
+        else if (WellReady())
+            hints.Add("Jump into the wells!");
     }
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
@@ -182,47 +180,98 @@ class JailSafe : BossComponent
         if (!_jailed)
             return;
         hints.SetPriority(Module.PrimaryActor, AIHints.Enemy.PriorityPointless);
-        if (actor.PosRot.Y > -405)
-        {
-            var next = WellPos(actor);
-            hints.GoalZones.Add(p => p.InCircle(next, 2) ? 1000 : 0);
-            hints.ForcedMovement = (next - actor.Position).ToVec3();
-            return;
-        }
         if (JailAddsAlive(actor) || !WellReady())
             return;
-        var well = WellPos(actor);
-        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(well, 2.5f));
-        hints.GoalZones.Add(p => p.InCircle(well, 2) ? 1000 : 0);
-        hints.ForcedMovement = (well - actor.Position).ToVec3();
+        for (var i = 0; i < WellLandings.Length; ++i)
+            hints.Portals.Add((_pad + WellOffsets[i], 2, _pad + WellLandings[i]));
+        hints.GoalZones.Add(AIHints.GoalSingleTarget(_pad + WellOffsets[3], 1, 9));
     }
 
-    public override void DrawArenaBackground(int pcSlot, Actor pc)
+    public override void DrawArenaForeground(int pcSlot, Actor pc)
     {
-        if (_jailed)
-            Arena.ZoneCircle(WellPos(pc), 3, ArenaColor.SafeFromAOE);
+        if (!_jailed || !WellReady())
+            return;
+        Arena.ZoneCircle(_pad + WellOffsets[0], 2, ArenaColor.SafeFromAOE);
+        Arena.ZoneCircle(_pad + WellOffsets[1], 2, ArenaColor.SafeFromAOE);
+        Arena.ZoneCircle(_pad + WellOffsets[2], 2, ArenaColor.SafeFromAOE);
+        Arena.ZoneCircle(_pad + WellOffsets[3], 1.5f, ArenaColor.SafeFromAOE);
+    }
+
+    private static ArenaBoundsCustom BuildJailBounds()
+    {
+        (WDir Off, float R)[] islands = [
+            (default, 9.5f),
+            (new(-5f, -21f), 4.5f),
+            (new(14f, -14f), 4.5f),
+            (new(20f, 0), 3.25f),
+        ];
+        return new(28, new(islands.Select(i => new RelPolygonWithHoles([.. CurveApprox.Circle(i.R, 0.05f).Select(c => c + i.Off)])).ToList()));
     }
 }
 
 class MacabreMark(BossModule module) : Components.GenericTowers(module)
 {
+    private int _numAdded;
+    private static readonly WPos FrontNE = new(106, 90);
+    private static readonly WPos FrontNW = new(94, 90);
+    private static readonly WPos CenterSE = new(106, 100);
+    private static readonly WPos CenterSW = new(94, 100);
+
     public override void OnMapEffect(byte index, uint state)
     {
         var pos = index switch
         {
-            0x1A => new WPos(94, 90),
-            0x1B => new WPos(106, 90),
-            0x1C => new WPos(94, 100),
-            0x1D => new WPos(106, 100),
+            0x1A => FrontNW,
+            0x1B => FrontNE,
+            0x1C => CenterSW,
+            0x1D => CenterSE,
             _ => default
         };
         if (pos == default)
             return;
 
-        if (state == 0x00020001)
+        if (state == 0x00020001 && _numAdded < 4)
+        {
+            ++_numAdded;
             Towers.Add(new(pos, 3, 4, 4, activation: WorldState.FutureTime(15)));
+        }
         else if (state is 0x00080004 or 0x08000400)
+        {
             Towers.RemoveAll(t => t.Position.AlmostEqual(pos, 1));
+            if (Towers.Count == 0)
+                _numAdded = 0;
+        }
+    }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        if (Towers.Count == 0)
+            return;
+
+        var i = PreferredIndex();
+        if (i < 0)
+            return;
+
+        var t = Towers[i];
+        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(t.Position, t.Radius), t.Activation);
+        hints.GoalZones.Add(AIHints.GoalSingleTarget(t.Position, 1, 5));
+    }
+
+    private int PreferredIndex()
+    {
+        var ne = -1;
+        var se = -1;
+        for (var i = 0; i < Towers.Count; ++i)
+        {
+            var t = Towers[i];
+            if (t.NumInside(Module) >= t.MinSoakers)
+                continue;
+            if (t.Position.AlmostEqual(FrontNE, 1))
+                ne = i;
+            else if (t.Position.AlmostEqual(CenterSE, 1))
+                se = i;
+        }
+        return ne >= 0 ? ne : se;
     }
 }
 
@@ -622,7 +671,7 @@ class T05NecronStates : StateMachineBuilder
                     if ((center - player.Position).LengthSq() > 225)
                         center = player.Position;
                     Module.Arena.Center = center;
-                    Module.Arena.Bounds = new ArenaBoundsCircle(12);
+                    Module.Arena.Bounds = JailSafe.JailBounds;
                 }
             })
             .Raw.Update = () => Module.Raid.Player() is { } p && !JailSafe.InAbyss(p) && (p.Position - new WPos(100, 100)).LengthSq() < 625;
@@ -675,7 +724,7 @@ class T05NecronStates : StateMachineBuilder
     }
 }
 
-[ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1061, NameID = 14093)]
+[ModuleInfo(Contributors = "Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1061, NameID = 14093)]
 public class T05Necron(WorldState ws, Actor primary) : BossModule(ws, primary, new(100, 100), new ArenaBoundsRect(18, 15))
 {
     public static readonly WPos[] JailArenas = [

@@ -1,0 +1,35 @@
+namespace BossMod.RealmReborn.Dungeon.D04Halatali.D042ThunderclapGuivre;
+
+public enum OID : uint
+{
+    Boss = 0x4644,
+    Helper = 0x233C
+}
+
+public enum AID : uint
+{
+    AutoAttack = 870, // Boss->player, no cast, single-target
+
+    Electrify = 40595, // Boss->location, 4.0s cast, range 6 circle
+
+    HydroelectricShockVisual = 40593, // Boss->self, 9.0+1,0s cast, single-target
+    HydroelectricShock = 41113, // Helper->self, 10.0s cast, ???
+
+    Levinfang = 40594 // Boss->player, 5.0s cast, single-target
+}
+
+class Electrify(BossModule module) : Components.StandardAOEs(module, AID.Electrify, 6);
+class Levinfang(BossModule module) : Components.SingleTargetCast(module, AID.Levinfang);
+
+class D042ThunderclapGuivreStates : StateMachineBuilder
+{
+    public D042ThunderclapGuivreStates(BossModule module) : base(module)
+    {
+        TrivialPhase()
+            .ActivateOnEnter<Electrify>()
+            .ActivateOnEnter<Levinfang>();
+    }
+}
+
+[ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 7, NameID = 1196)]
+public class D042ThunderclapGuivre(WorldState ws, Actor primary) : BossModule(ws, primary, primary.Position, new ArenaBoundsCircle(20));
