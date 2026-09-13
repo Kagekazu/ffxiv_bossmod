@@ -6,6 +6,8 @@ public enum OID : uint
     Helper = 0x233C, // R0.500
     IcyHands1 = 0x4903, // R3.575
     IcyHands2 = 0x4904, // R3.575
+    IcyHands5 = 0x4905, // R3.575
+    IcyHands6 = 0x4906, // R3.575
     LoomingSpecter1 = 0x4907, // R15.750
     IcyHands3 = 0x4908, // R4.400
     IcyHands4 = 0x4909, // R3.575
@@ -44,6 +46,7 @@ public enum AID : uint
     BlueShockwaveCast = 44546, // Boss->self, 6.0+1.0s cast, single-target visual
     BlueShockwave = 44547, // Helper->self, no cast, range 100 100-degree cone
     MassMacabre = 44548, // Boss->self, 4.0s cast, single-target visual
+    SpreadingFear = 44549, // IcyHands4->self, 8.0s cast, range 50 circle
     GrandCrossArena = 44603, // Helper->location, 7.0s cast, range 9-60 donut
     SpecterOfDeath = 44605, // Boss->self, 5.0s cast, single-target visual
     CropRotation = 44609, // Boss->self, 3.0s cast, single-target visual
@@ -57,11 +60,11 @@ public enum AID : uint
 
 public enum IconID : uint
 {
-    StoreDonut = 604, // Boss
-    StoreCircle = 605, // Boss
+    StoreCircle = 604, // Boss, Out
+    StoreDonut = 605, // Boss, In
     BlueShockwave = 615, // Boss
-    StoreDonut2 = 621, // Boss
-    StoreCircle2 = 622, // Boss
+    StoreCircle2 = 621, // Boss, Out
+    StoreDonut2 = 622, // Boss, In
 }
 
 class FearOfDeath(BossModule module) : Components.RaidwideCast(module, AID.FearOfDeath);
@@ -73,10 +76,15 @@ class JailSafe : BossComponent
 {
     public const float AbyssY = -200;
     private static readonly WPos MainCenter = new(100, 100);
-    private static readonly WPos FirstPad = new(100, -100);
-    private static readonly WPos FirstWell = new(98.9f, -109.1f);
+    private static readonly WDir[] WellOffsets = [
+        new(0, -7.4f),
+        new(-2.5f, -20f),
+        new(15f, -11.5f),
+        new(20f, 0),
+    ];
     private bool _jailed;
     private WPos _pad;
+    private BitMask _wells;
 
     public JailSafe(BossModule module) : base(module)
     {
@@ -95,7 +103,7 @@ class JailSafe : BossComponent
 
         if (NearJailPad(p))
         {
-            _pad = PadCenter(p);
+            _pad = IslandPad(p);
             _jailed = true;
             var focus = p.PosRot.Y > -405 ? p.Position : _pad;
             if ((Arena.Center - focus).LengthSq() > 1)
@@ -114,25 +122,37 @@ class JailSafe : BossComponent
         }
     }
 
-    private WPos PadCenter(Actor p)
+    public override void OnMapEffect(byte index, uint state)
     {
-        if (p.PosRot.Y > -405)
-            return p.Position;
-        var known = T05Necron.JailArenas.MinBy(j => (j - p.Position).LengthSq());
-        return (known - p.Position).LengthSq() < 100 ? known : p.Position;
+        if (index > 0x07)
+            return;
+        if (state == 0x00020001)
+            _wells.Set(index);
+        else if (state == 0x00080004)
+            _wells.Clear(index);
     }
 
-    private WPos WellPos()
+    private WPos IslandPad(Actor p)
     {
-        var from = _jailed ? _pad : Arena.Center;
-        if ((from - FirstPad).LengthSq() < 16)
-            return FirstWell;
-        var away = from - MainCenter;
-        if (away.LengthSq() < 1)
-            away = new WDir(0, -1);
-        else
-            away = away.Normalized();
-        return from + away * 9f;
+        var known = T05Necron.JailArenas.MinBy(j => (j - p.Position).LengthSq());
+        return (known - p.Position).LengthSq() < 625 ? known : p.Position;
+    }
+
+    private WPos WellPos(Actor actor)
+    {
+        if (actor.PosRot.Y <= -405)
+            return _pad + WellOffsets[0];
+        return WellOffsets.Skip(1).Select(o => _pad + o).MinBy(w => (w - actor.Position).LengthSq());
+    }
+
+    private bool WellReady()
+    {
+        if (_wells.None())
+            return true;
+        for (var i = 0; i < T05Necron.JailArenas.Length; ++i)
+            if ((T05Necron.JailArenas[i] - _pad).LengthSq() < 1)
+                return _wells[i];
+        return true;
     }
 
     private bool JailAddsAlive(Actor p)
@@ -153,7 +173,7 @@ class JailSafe : BossComponent
             return;
         if (JailAddsAlive(actor))
             hints.Add("Kill the adds!");
-        else if (!actor.Position.InCircle(WellPos(), 3))
+        else if (WellReady() && !actor.Position.InCircle(WellPos(actor), 3))
             hints.Add("Jump into the well!");
     }
 
@@ -162,9 +182,16 @@ class JailSafe : BossComponent
         if (!_jailed)
             return;
         hints.SetPriority(Module.PrimaryActor, AIHints.Enemy.PriorityPointless);
-        if (actor.PosRot.Y > -405 || JailAddsAlive(actor))
+        if (actor.PosRot.Y > -405)
+        {
+            var next = WellPos(actor);
+            hints.GoalZones.Add(p => p.InCircle(next, 2) ? 1000 : 0);
+            hints.ForcedMovement = (next - actor.Position).ToVec3();
             return;
-        var well = WellPos();
+        }
+        if (JailAddsAlive(actor) || !WellReady())
+            return;
+        var well = WellPos(actor);
         hints.AddForbiddenZone(ShapeDistance.InvertedCircle(well, 2.5f));
         hints.GoalZones.Add(p => p.InCircle(well, 2) ? 1000 : 0);
         hints.ForcedMovement = (well - actor.Position).ToVec3();
@@ -172,35 +199,29 @@ class JailSafe : BossComponent
 
     public override void DrawArenaBackground(int pcSlot, Actor pc)
     {
-        if (_jailed && pc.PosRot.Y <= -405)
-            Arena.ZoneCircle(WellPos(), 3, ArenaColor.SafeFromAOE);
+        if (_jailed)
+            Arena.ZoneCircle(WellPos(pc), 3, ArenaColor.SafeFromAOE);
     }
 }
 
 class MacabreMark(BossModule module) : Components.GenericTowers(module)
 {
-    private static readonly WPos[] AllTowers = [
-        new(91, 88),
-        new(109, 88),
-        new(100, 94),
-        new(85, 97),
-        new(115, 97),
-        new(85, 103),
-        new(115, 103),
-        new(100, 106),
-        new(91, 112),
-        new(109, 112)
-    ];
-
     public override void OnMapEffect(byte index, uint state)
     {
-        if (index is < 0x1A or > 0x23)
+        var pos = index switch
+        {
+            0x1A => new WPos(94, 90),
+            0x1B => new WPos(106, 90),
+            0x1C => new WPos(94, 100),
+            0x1D => new WPos(106, 100),
+            _ => default
+        };
+        if (pos == default)
             return;
 
-        var pos = AllTowers[index - 0x1A];
         if (state == 0x00020001)
-            Towers.Add(new(pos, 3, 4, 4, activation: WorldState.FutureTime(30)));
-        else if (state == 0x00080004)
+            Towers.Add(new(pos, 3, 4, 4, activation: WorldState.FutureTime(15)));
+        else if (state is 0x00080004 or 0x08000400)
             Towers.RemoveAll(t => t.Position.AlmostEqual(pos, 1));
     }
 }
@@ -361,12 +382,12 @@ class GrandCrossLaser(BossModule module) : Components.GenericAOEs(module, AID.Gr
         var angle = (Arena.Center - source.Position).ToAngle();
         if (tether.ID == 344)
         {
-            _predicted.Add((angle + 207.Degrees(), WorldState.FutureTime(5)));
+            _predicted.Add((angle + 207.Degrees(), WorldState.FutureTime(5.6f)));
             _predicted.SortBy(l => l.Activation);
         }
         if (tether.ID == 343)
         {
-            _predicted.Add((angle + 42.Degrees(), WorldState.FutureTime(7)));
+            _predicted.Add((angle + 42.Degrees(), WorldState.FutureTime(7.6f)));
             _predicted.SortBy(l => l.Activation);
         }
     }
@@ -497,7 +518,9 @@ class Aetherblight(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-class IcyHandsAdds(BossModule module) : Components.AddsMulti(module, [OID.IcyHands1, OID.IcyHands2, OID.IcyHands3, OID.IcyHands4], 1)
+class SpreadingFear(BossModule module) : Components.CastHint(module, AID.SpreadingFear, "Hand enrage!", true);
+
+class IcyHandsAdds(BossModule module) : Components.AddsMulti(module, [OID.IcyHands1, OID.IcyHands2, OID.IcyHands3, OID.IcyHands4, OID.IcyHands5, OID.IcyHands6], 1)
 {
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
@@ -618,7 +641,8 @@ class T05NecronStates : StateMachineBuilder
     {
         Timeout(id, 50, "Doom")
             .ActivateOnEnter<IcyHandsAdds>()
-            .ActivateOnEnter<ChokingGrasp>();
+            .ActivateOnEnter<ChokingGrasp>()
+            .ActivateOnEnter<SpreadingFear>();
     }
 
     private void P2(uint id) => ActivateCommon(id);
@@ -646,6 +670,7 @@ class T05NecronStates : StateMachineBuilder
             .ActivateOnEnter<Aetherblight>()
             .ActivateOnEnter<BlueShockwave>()
             .ActivateOnEnter<IcyHandsAdds>()
+            .ActivateOnEnter<SpreadingFear>()
             .ActivateOnEnter<JailSafe>();
     }
 }
@@ -654,13 +679,13 @@ class T05NecronStates : StateMachineBuilder
 public class T05Necron(WorldState ws, Actor primary) : BossModule(ws, primary, new(100, 100), new ArenaBoundsRect(18, 15))
 {
     public static readonly WPos[] JailArenas = [
-        new(-100, -100),
         new(100, -100),
-        new(-100, 100),
         new(300, -100),
         new(300, 100),
         new(300, 300),
         new(100, 300),
         new(-100, 300),
+        new(-100, 100),
+        new(-100, -100),
     ];
 }
