@@ -19,6 +19,7 @@ public enum AID : uint
     FrostRune = 15658, // Boss->self, 3.0s cast, single-target
     GrowthRune = 15662, // Boss->self, 3.0s cast, single-target
     MidsummerNightsDream = 15664, // Boss->self, 4.0s cast, single-target
+    MidsummerNightsDreamHit = 15665, // Boss->self, no cast
     BeingMortal = 15666, // Boss->self, 4.0s cast, single-target
     Peasebomb = 15668, // Peaseblossom->self, 5.0s cast, single-target
     LeafstormVisual = 15672, // Mustardseed->self, 2.5s cast, single-target
@@ -48,6 +49,9 @@ public enum AID : uint
     GentleBreeze = 16259, // Puck->self, 2.5s cast, range 60 width 4 rect
     Uplift = 16927, // Helper->player, 5.0s cast, range 6 circle spread
     FlameHammer = 17267, // SpiritOfFlame->self, no cast, range 6 circle
+    Unknown17888 = 17888, // Helper->self, no cast
+    PeaseblossomSpecial = 18058, // PeaseblossomGiant->self, no cast
+    PuckSpecial = 18059, // PuckGiant->self, no cast
 }
 
 class FrostRuneAOE(BossModule module) : Components.StandardAOEs(module, AID.FrostRuneAOE, 10);

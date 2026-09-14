@@ -34,9 +34,11 @@ public enum AID : uint
     RadiantMeteorSpread = 20251, // Helper->player, 6.0s cast, range 20 circle
     SuitonSan = 20252, // Helper->self, 6.0s cast, range 60 width 60 rect
     BrimstoneEarth = 20254, // Helper->location, 8.0s cast, range 6 circle
+    BrimstoneEarthRepeat = 20255, // Helper->location, no cast, range 6 circle
     DelugeOfDeath = 20256, // Helper->player, 5.0s cast, range 100 circle
     MeteorImpact = 20257, // Helper->self, no cast, range 4 circle
     Cauterize = 20261, // WyrmOfLight->self, 4.0s cast, range 40 width 20 rect
+    Unknown20262 = 20262, // Helper->self, no cast
     TerrorUnleashed = 20263, // Boss->self, 3.0s cast, range 70 circle
     TheBitterEnd = 20264, // BossP2->player, 5.0s cast, single-target tankbuster
     ElddragonDive = 20265, // BossP2->self, 5.0s cast, range 70 circle
@@ -57,13 +59,19 @@ public enum AID : uint
     SummonWyrm = 20289, // Boss/BossP2->self, 3.0s cast, single-target
     SwordOfLight = 20290, // Boss/BossP2->self, 3.0s cast, single-target
     SolemnConfiteorVisual = 20291, // Boss->self, 3.0s cast, single-target
+    Unknown20293 = 20293, // Boss/BossP2->self, no cast
+    Unknown20294 = 20294, // Helper->self, no cast
     RadiantSacrament = 20296, // Helper->self, 6.0s cast, range 60 width 40 rect
     ImbuedCoruscanceIn = 20299, // Boss->self, 7.0s cast, range 10 circle
     ImbuedCoruscanceOut = 20300, // BossP2->self, 7.0s cast, range 5-60 donut
+    Unknown20593 = 20593, // Boss->self, no cast
+    Unknown20611 = 20611, // Helper->self, no cast
     RadiantDesperadoCast = 20829, // BossP2->self, 6.0s cast, single-target
     RadiantBraverCast = 21076, // BossP2->self, 6.0s cast, single-target
+    TwincastHit = 21278, // SpectralWhiteMage/BlackMage->self, no cast
     Ascendance = 21297, // Boss->self, 6.0s cast, range 60 circle
     AbsoluteTeleport = 21298, // Boss->self, 5.0s cast, single-target
+    Unknown21379 = 21379, // BossP2->self, no cast
     UltimateCrossover = 21627, // BossP2->self, 7.0s cast, single-target
     UltimateCrossoverAOE = 21628, // Helper->self, 6.0s cast, range 60 circle
 }

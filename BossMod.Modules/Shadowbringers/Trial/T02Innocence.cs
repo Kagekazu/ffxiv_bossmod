@@ -10,6 +10,7 @@ public enum OID : uint
     NailOfCondemnation = 0x2900, // R0.500
     ThornOfCondemnation = 0x2901, // R1.000
     SwordOfCondemnation = 0x2902, // R0.000
+    InnocenceAdd = 0x2BED, // R2.800
     ForgivenShame2 = 0x2BEE, // R0.960
     ForgivenVenery2 = 0x2BEF, // R1.500
 }
@@ -17,7 +18,12 @@ public enum OID : uint
 public enum AID : uint
 {
     AutoAttack = 870, // ForgivenShame/Venery->player, no cast, single-target
+    Unknown14588 = 14588, // Helper->self, no cast
+    AutoAttackBoss = 16016, // Boss->player, no cast, single-target
+    Unknown16017 = 16017, // Boss->self, no cast
+    Unknown16018 = 16018, // Boss->self, no cast
     ExaltedWing = 16019, // Helper->self, no cast, range 40 circle
+    Unknown16020 = 16020, // Boss->self, no cast
     HeavenlyHost = 16021, // Boss->self, 3.0s cast, single-target
     GuidingLight = 16022, // Boss->self, 3.0s cast, single-target
     Sinsphere = 16023, // Helper->self, no cast, range 5 circle
@@ -28,7 +34,11 @@ public enum AID : uint
     DaybreakAOE = 16029, // Helper->location, 3.5s cast, range 6 circle
     ScoldsBridle = 16030, // ForgivenShame->self, 6.0s cast, range 40 circle
     HolySword = 16031, // ForgivenVenery->player, 5.0s cast, single-target tankbuster
+    AutoAttackP2 = 16032, // BossP2->player, no cast, single-target
+    Unknown16033 = 16033, // BossP2->self, no cast
+    Unknown16034 = 16034, // BossP2->self, no cast
     RighteousBolt = 16035, // BossP2->player, 5.0s cast, single-target tankbuster
+    NailExplosion = 16041, // NailOfCondemnation->self, no cast
     SoulAndBody1 = 16049, // Helper->self, 3.0s cast, range 5-20 donut
     SoulAndBody2 = 16050, // Helper->self, 3.0s cast, range 5-20 donut
     HolyTrinity = 16051, // Helper->self, 3.0s cast, range 40 width 4 rect
@@ -37,6 +47,7 @@ public enum AID : uint
     ReprobationShort = 16055, // ThornOfCondemnation->self, 1.5s cast, single-target
     ReprobationLine = 16056, // Helper->self, 3.0s cast, range 21 width 4 rect
     GodRay = 16060, // BossP2->self, 4.5s cast, single-target
+    GodRayRepeat = 16061, // BossP2->self, no cast
     GodRayCone = 16062, // Helper->self, 4.5s cast, range 5 100-degree cone
     GodRayDonut1 = 16063, // Helper->self, 3.5s cast, range 5-10 donut
     GodRayDonut2 = 16064, // Helper->self, 3.5s cast, range 10-20 donut
@@ -46,10 +57,17 @@ public enum AID : uint
     ReprobationLong = 16075, // Helper->self, 1.5s cast, range 42 width 4 rect
     Shadowreaver = 16106, // BossP2->self, 5.0s cast, range 40 circle
     ExaltedPlumes = 16114, // Helper->self, no cast, range 40 circle
+    Unknown16121 = 16121, // Helper->self, no cast
+    Unknown16122 = 16122, // Helper->self, no cast
     LightPillarCast = 16190, // BossP2->self, 5.0s cast, single-target
+    Unknown16197 = 16197, // Helper->self, no cast
     WingedReprobation = 16572, // BossP2->self, 3.0s cast, single-target
+    Unknown16708 = 16708, // Boss->self, no cast
+    Unknown17072 = 17072, // BossP2->self, no cast
+    Unknown17073 = 17073, // SwordOfCondemnation->self, no cast
     Manacle = 18064, // ForgivenShame2->location, 3.5s cast, range 6 circle
     HolySwordAdd = 18065, // ForgivenVenery2->ForgivenShame2, 9.0s cast, single-target
+    Unknown18184 = 18184, // Helper->self, no cast
 }
 
 public enum TetherID : uint
