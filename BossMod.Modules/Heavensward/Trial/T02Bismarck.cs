@@ -4,18 +4,20 @@ public enum OID : uint
 {
     Boss = 0xEF8, // R6.000, Bismarck
     Helper = 0xEF9, // R0.500
-    VaporBubble = 0xEFA, // R1.200
+    VaporBubble = 0xEFA, // R1.200, NameID 3834
     LanMaiiVundu = 0xEFC, // R1.500
     VukMaiiVundu = 0xEFD, // R1.300
     SoSanuwa = 0xEFE, // R3.500
     FunnelCloud = 0xEFF, // R1.000
     UlSanuwa = 0xF00, // R3.500
     MagitekFieldGenerator = 0xF60, // R1.000
-    ChitinCarapace = 0x1147, // R5.000, Part
-    Corona = 0x1148, // R5.000, Part
-    Dragonkiller = 0x12EB, // R1.000
+    ChitinCarapace = 0x1147, // R5.000, Part, NameID 4423 — first shell target
+    Corona = 0x1148, // R5.000, Part, NameID 4424 — second shell target
+    Dragonkiller = 0x12EB, // R1.000, cannon actor once armed
     HelperB = 0x1214, // R0.500
     HelperC = 0x1303, // R1.000
+    DragonkillerNorth = 0x1E9A28, // EventObj 2005544 (~-13, -17)
+    DragonkillerSouth = 0x1E9A29, // EventObj 2005545 (~-14, 19)
 }
 
 public enum AID : uint
@@ -57,4 +59,4 @@ class T02BismarckStates : StateMachineBuilder
 }
 
 [ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 88, NameID = 3649)]
-public class T02Bismarck(WorldState ws, Actor primary) : BossModule(ws, primary, new(0, 0), new ArenaBoundsCircle(25));
+public class T02Bismarck(WorldState ws, Actor primary) : BossModule(ws, primary, new(0, 0), new ArenaBoundsCircle(24));
