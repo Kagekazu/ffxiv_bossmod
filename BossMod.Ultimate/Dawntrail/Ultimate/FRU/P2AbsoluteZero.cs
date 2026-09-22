@@ -103,7 +103,8 @@ class P2Intermission(BossModule module) : Components.GenericBaitAway(module)
             var assignedCrystal = CrystalsOfLight.FirstOrDefault(c => c.Position.AlmostEqual(assignedPosition, 2));
             if (assignedCrystal != null)
             {
-                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(assignedPosition, 5), WorldState.FutureTime(60));
+                // MaxValue: FutureTime(60) was too soft vs PathfindMeleeGreed holding ice-veil maxmelee mid/W
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(assignedPosition, 5), DateTime.MaxValue);
                 hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center, 17), DateTime.MaxValue); // prefer to stay near border, unless everything else is covered with aoes
             }
             else
@@ -126,6 +127,22 @@ class P2Intermission(BossModule module) : Components.GenericBaitAway(module)
             }
             // else: just dodge cones etc...
         }
+    }
+
+    // crystal / cone bait spots are off maxmelee of ice veil; greed otherwise camps mid
+    public bool RequiresStrictPosition(PartyRolesConfig.Assignment assignment)
+    {
+        if (!CrystalsActive)
+            return false;
+        var clockSpot = _config.P2IntermissionClockSpots[assignment];
+        if (clockSpot < 0)
+            return false;
+        if ((clockSpot & 1) == 0)
+        {
+            var assignedPosition = Module.Center + 15 * (180 - 45 * clockSpot).Degrees().ToDirection();
+            return CrystalsOfLight.Any(c => c.Position.AlmostEqual(assignedPosition, 2));
+        }
+        return _cones?.Casters.Count == 0 && CrystalsOfDarkness.Any(c => c.Position.AlmostEqual(Module.Center + 9 * (180 - 45 * clockSpot).Degrees().ToDirection(), 2));
     }
 
     public override void DrawArenaForeground(int pcSlot, Actor pc)

@@ -13,6 +13,18 @@ class P1Explosion(BossModule module) : Components.GenericTowers(module)
     private bool _isWideLine;
     private bool _lineDone;
 
+    // PathfindMeleeGreed will otherwise hold maxmelee until the last second, then sprint into the tower
+    public bool RequiresStrictPosition(int slot, PartyRolesConfig.Assignment assignment)
+    {
+        var role = _config.P1ExplosionsAssignment[assignment];
+        if (role < 2 || TowerDir == default)
+            return false;
+        var actor = Raid[slot];
+        if (actor == null || Towers.FindIndex(t => !t.ForbiddenSoakers[slot]) < 0)
+            return false;
+        return NeedSoak(actor);
+    }
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         var role = _config.P1ExplosionsAssignment[assignment];
@@ -41,15 +53,16 @@ class P1Explosion(BossModule module) : Components.GenericTowers(module)
             var index = Towers.FindIndex(t => !t.ForbiddenSoakers[slot]);
             if (index >= 0)
             {
-                var needSoak = _lineDone || _isWideLine && actor.Role is Role.Healer or Role.Ranged;
                 ref var t = ref Towers.Ref(index);
-                if (needSoak)
+                if (NeedSoak(actor))
                     hints.AddForbiddenZone(ShapeDistance.InvertedCircle(t.Position, t.Radius), t.Activation);
                 else
                     hints.AddForbiddenZone(ShapeDistance.InvertedRect(new(Module.Center.X, t.Position.Z), TowerDir, 20, 0, t.Radius), t.Activation);
             }
         }
     }
+
+    private bool NeedSoak(Actor actor) => _lineDone || _isWideLine && actor.Role is Role.Healer or Role.Ranged;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {

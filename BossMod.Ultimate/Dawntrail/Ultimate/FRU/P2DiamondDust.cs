@@ -253,7 +253,8 @@ class P2HeavenlyStrike(BossModule module) : Components.Knockback(module, AID.Hea
         var icicle = module.FindComponent<P2IcicleImpact>();
         if (icicle?.AOEs.Count > 0)
         {
-            var safeDir = (icicle.AOEs[0].Origin - module.Center).Normalized();
+            // first pair explodes on an axis; knockback has to go in the *gaps* (90° off that ice), not along the ice
+            var safeDir = (icicle.AOEs[0].Origin - module.Center).Normalized().OrthoL();
             if (safeDir.X > 0.5f || safeDir.Z > 0.8f)
                 safeDir = -safeDir; // G1
             foreach (var (slot, group) in Service.Config.Get<FRUConfig>().P2DiamondDustKnockbacks.Resolve(module.Raid))

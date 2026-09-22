@@ -16,15 +16,27 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
 
+    // PathfindMeleeGreed otherwise stays on boss instead of walking to -11·blue / +19·blue
+    public bool RequiresStrictPosition(int slot) => _aoe == null && _blueMirror != default;
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        if (_aoe == null && Module.Enemies(OID.BossP2).FirstOrDefault() is var boss && boss != null && boss.TargetID == actor.InstanceID)
+        if (_aoe != null || _blueMirror == default)
+            return;
+
+        if (Module.Enemies(OID.BossP2).FirstOrDefault() is var boss && boss != null && boss.TargetID == actor.InstanceID)
         {
             // main tank should drag the boss away
             // note: before mirror appears, we want to stay near center (to minimize movement no matter where mirror appears), so this works fine if blue mirror is zero
             // TODO: verify distance calculation - we want boss to be at least 4m away from center
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center - 16 * _blueMirror, 1), DateTime.MaxValue);
+        }
+        else
+        {
+            // melee prepos opposite blue (near boss); ranged far on blue side — was draw-only, so greed never left maxmelee
+            var distance = _rangedSpots[slot] ? 19 : -11;
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + distance * _blueMirror, 1), DateTime.MaxValue);
         }
     }
 
@@ -198,6 +210,8 @@ class P2MirrorMirrorBanish : P2Banish
             }
         }
     }
+
+    public bool RequiresStrictPosition(int slot, PartyRolesConfig.Assignment assignment) => PrepositionLocation(slot, assignment) != null;
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {

@@ -48,16 +48,45 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         }
     }
 
-    private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment) => strategy.As<MovementStrategy>() switch
+    private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
-        MovementStrategy.Pathfind => PathfindPosition(null, assignment, primaryTarget),
-        MovementStrategy.PathfindMeleeGreed => PathfindPosition(Player.FindStatus(SID.ThinIce) != null ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment, primaryTarget),
-        MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
-        MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
-        MovementStrategy.Prepull => PrepullPosition(module, assignment),
-        MovementStrategy.DragToCenter => DragToCenterPosition(module),
-        _ => null
-    };
+        var strat = strategy.As<MovementStrategy>();
+        // plan default is PathfindMeleeGreed; Prepull is only a short window near 0. don't walk onto the boss during countdown
+        if (!Player.InCombat && strat is MovementStrategy.Pathfind or MovementStrategy.PathfindMeleeGreed)
+            strat = MovementStrategy.Prepull;
+
+        return strat switch
+        {
+            MovementStrategy.Pathfind => PathfindPosition(null, assignment, primaryTarget),
+            MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment, primaryTarget),
+            MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
+            MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
+            MovementStrategy.Prepull => PrepullPosition(module, assignment),
+            MovementStrategy.DragToCenter => DragToCenterPosition(module),
+            _ => null
+        };
+    }
+
+    // same idea as ThinIce: when the plan wants a spot off maxmelee, don't snap back to the boss
+    private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
+    {
+        if (Player.FindStatus(SID.ThinIce) != null)
+            return true;
+        if (!module.Raid.TryFindSlot(Player.InstanceID, out var slot))
+            return false;
+
+        if (module.FindComponent<P1Explosion>() is { } explosion && explosion.RequiresStrictPosition(slot, assignment))
+            return true;
+        if (module.FindComponent<P2MirrorMirrorReflectedScytheKickBlue>() is { } blue && blue.RequiresStrictPosition(slot))
+            return true;
+        if (module.FindComponent<P2MirrorMirrorBanish>() is { } banish && banish.RequiresStrictPosition(slot, assignment))
+            return true;
+        if (module.FindComponent<P2Intermission>() is { } intermission && intermission.RequiresStrictPosition(assignment))
+            return true;
+        if (module.FindComponent<P3UltimateRelativity>() is { } relativity && relativity.RequiresStrictPosition(slot, Player))
+            return true;
+        return false;
+    }
 
     // TODO: account for leeway for casters
     private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment, Actor? primaryTarget)
