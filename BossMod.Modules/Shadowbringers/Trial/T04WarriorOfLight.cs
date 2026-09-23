@@ -84,7 +84,13 @@ public enum SID : uint
 
 public enum IconID : uint
 {
+    Icon87 = 87,
     Stack = 161, // player
+    Spread = 218,
+    Icon225 = 225,
+    Icon227 = 227,
+    Icon233 = 233,
+    Icon234 = 234,
 }
 
 class CoruscantSaberIn(BossModule module) : Components.StandardAOEs(module, AID.CoruscantSaberIn, 10);

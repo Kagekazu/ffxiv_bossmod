@@ -27,6 +27,7 @@ public enum AID : uint
     HeavenlyHost = 16021, // Boss->self, 3.0s cast, single-target
     GuidingLight = 16022, // Boss->self, 3.0s cast, single-target
     Sinsphere = 16023, // Helper->self, no cast, range 5 circle
+    Sinburst = 16024, // Helper->self, no cast, range 40 circle
     Enthrall = 16025, // Boss->self, 4.0s cast, range 40 circle
     Realmrazer = 16026, // Boss->self, 5.0s cast, single-target
     RealmrazerAOE = 16027, // Helper->self, no cast, range 40 circle
@@ -52,6 +53,8 @@ public enum AID : uint
     GodRayDonut1 = 16063, // Helper->self, 3.5s cast, range 5-10 donut
     GodRayDonut2 = 16064, // Helper->self, 3.5s cast, range 10-20 donut
     FlamingSword = 16065, // SwordOfCondemnation->self, no cast, range 40 circle
+    DropOfLightVisual = 16068, // BossP2->self, no cast, single-target
+    DropOfLight = 16069, // Helper->self, no cast, range 10 circle
     LightPillar = 16070, // BossP2->self, no cast, range 40 width 6 rect
     BeatificVision = 16071, // BossP2->self, 5.0s cast, range 45 width 40 rect
     ReprobationLong = 16075, // Helper->self, 1.5s cast, range 42 width 4 rect
@@ -65,9 +68,17 @@ public enum AID : uint
     Unknown16708 = 16708, // Boss->self, no cast
     Unknown17072 = 17072, // BossP2->self, no cast
     Unknown17073 = 17073, // SwordOfCondemnation->self, no cast
+    HolySwordInstant = 17175, // ForgivenVenery->player, no cast, single-target
     Manacle = 18064, // ForgivenShame2->location, 3.5s cast, range 6 circle
     HolySwordAdd = 18065, // ForgivenVenery2->ForgivenShame2, 9.0s cast, single-target
+    GuiltyVerdict = 18066, // ForgivenVenery2->self, no cast, range 50 circle
     Unknown18184 = 18184, // Helper->self, no cast
+}
+
+public enum IconID : uint
+{
+    Stack = 138,
+    Spread = 218,
 }
 
 public enum TetherID : uint
@@ -76,7 +87,7 @@ public enum TetherID : uint
 }
 
 class Enthrall(BossModule module) : Components.CastGaze(module, AID.Enthrall);
-class Realmrazer(BossModule module) : Components.RaidwideCast(module, AID.Realmrazer);
+class Realmrazer(BossModule module) : Components.RaidwideCastDelay(module, AID.Realmrazer, AID.RealmrazerAOE, 0.5f);
 class DaybreakAOE(BossModule module) : Components.StandardAOEs(module, AID.DaybreakAOE, 6);
 class ScoldsBridle(BossModule module) : Components.RaidwideCast(module, AID.ScoldsBridle);
 class HolySword(BossModule module) : Components.SingleTargetCast(module, AID.HolySword);
@@ -92,6 +103,7 @@ class GodRayDonut2(BossModule module) : Components.StandardAOEs(module, AID.GodR
 class BeatificVision(BossModule module) : Components.StandardAOEs(module, AID.BeatificVision, new AOEShapeRect(45, 20));
 class Shadowreaver(BossModule module) : Components.RaidwideCast(module, AID.Shadowreaver);
 class Manacle(BossModule module) : Components.StandardAOEs(module, AID.Manacle, 6);
+class HolySwordAdd(BossModule module) : Components.SingleTargetCast(module, AID.HolySwordAdd, "Interrupt add");
 class InnocenceAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.ForgivenShame, (uint)OID.ForgivenVenery, (uint)OID.ForgivenShame2, (uint)OID.ForgivenVenery2], 1);
 
 class T02InnocenceStates : StateMachineBuilder
@@ -133,6 +145,7 @@ class T02InnocenceStates : StateMachineBuilder
             .ActivateOnEnter<BeatificVision>()
             .ActivateOnEnter<Shadowreaver>()
             .ActivateOnEnter<Manacle>()
+            .ActivateOnEnter<HolySwordAdd>()
             .ActivateOnEnter<InnocenceAdds>();
     }
 }

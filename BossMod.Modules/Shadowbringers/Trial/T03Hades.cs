@@ -51,6 +51,7 @@ public enum AID : uint
     DualStrike = 16738, // 233C->player, 5.0s cast, range 5 circle
     DualStrike1 = 16737, // 294A->self, 5.0s cast, single-target
     EchoOfTheLost = 16740, // 294A->self, 7.0s cast, range 100 ?-degree cone
+    WailOfTheLost = 16741, // 294A->self, 5.0s cast, range 40 width 40 rect
     PolydegmonsPurgation = 16754, // 233C->self, 5.0s cast, range 100 width 16 rect
     PolydegmonsPurgation1 = 16753, // 233C->self, 5.0s cast, range 100 width 16 rect
     PolydegmonsPurgation2 = 16752, // 294A->self, 5.0s cast, single-target
@@ -117,6 +118,7 @@ class AncientDarkIV(BossModule module) : Components.RaidwideCast(module, AID.Anc
 class Titanomachy(BossModule module) : Components.RaidwideCast(module, AID.Titanomachy);
 class ShadowStream(BossModule module) : Components.StandardAOEs(module, AID.ShadowStream, new AOEShapeRect(100, 8));
 class DualStrike(BossModule module) : Components.StandardAOEs(module, AID.DualStrike, 5);
+class WailOfTheLost(BossModule module) : Components.StandardAOEs(module, AID.WailOfTheLost, new AOEShapeRect(40, 20));
 class PolydegmonsPurgation(BossModule module) : Components.StandardAOEs(module, AID.PolydegmonsPurgation, new AOEShapeRect(100, 8));
 class PolydegmonsPurgation1(BossModule module) : Components.StandardAOEs(module, AID.PolydegmonsPurgation1, new AOEShapeRect(100, 8));
 class LifeInCaptivity(BossModule module) : Components.RaidwideCast(module, AID.LifeInCaptivity);
@@ -141,6 +143,7 @@ class T03HadesStates : StateMachineBuilder
             .ActivateOnEnter<Titanomachy>()
             .ActivateOnEnter<ShadowStream>()
             .ActivateOnEnter<DualStrike>()
+            .ActivateOnEnter<WailOfTheLost>()
             .ActivateOnEnter<PolydegmonsPurgation>()
             .ActivateOnEnter<PolydegmonsPurgation1>()
             .ActivateOnEnter<LifeInCaptivity>()

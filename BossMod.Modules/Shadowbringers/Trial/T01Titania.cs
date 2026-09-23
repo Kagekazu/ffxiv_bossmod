@@ -54,6 +54,15 @@ public enum AID : uint
     PuckSpecial = 18059, // PuckGiant->self, no cast
 }
 
+public enum IconID : uint
+{
+    Stack = 62,
+    Spread = 139,
+    Stack161 = 161,
+    Icon189 = 189,
+    Icon230 = 230,
+}
+
 class FrostRuneAOE(BossModule module) : Components.StandardAOEs(module, AID.FrostRuneAOE, 10);
 class BeingMortalAOE(BossModule module) : Components.RaidwideCast(module, AID.BeingMortalAOE);
 class Pease(BossModule module) : Components.SpreadFromCastTargets(module, AID.Pease, 6);

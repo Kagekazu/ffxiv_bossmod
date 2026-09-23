@@ -30,37 +30,56 @@ public enum AID : uint
     ThordanHit4186 = 4186, // Boss->self, no cast
     ThordanHit4187 = 4187, // Boss->self, no cast
     ThordanHit4190 = 4190, // Boss->self, no cast
-    ThordanCast4200 = 4200, // Boss->self, 3.7s cast
-    ThordanCast4201 = 4201, // Boss->self, 4.7s cast
+    TheDragonsEye = 4200, // Boss->self, 4.0s cast, single-target
+    TheDragonsGaze = 4201, // Boss->self, 5.0s cast, range 80+R circle gaze
     ThordanHit4202 = 4202, // Boss->self, no cast
     HelperHit4203 = 4203, // Helper->self, no cast
     ThordanHit4204 = 4204, // Boss->self, no cast
-    ZephirinCast = 4205, // SerZephirin->self, 14.7s cast
-    GrinnauxCast4212 = 4212, // SerGrinnaux->self, 5.2s cast
-    GrinnauxCast4213 = 4213, // Helper->self, 5.7s cast
-    HermenostCast4214 = 4214, // SerHermenost->self, 4.9s cast
-    HermenostCast4215 = 4215, // Helper->self, 7.7s cast
+    SacredCross = 4205, // SerZephirin->self, 15.0s cast, range 80+R circle
+    DimensionalCollapseVisual = 4212, // SerGrinnaux->self, 5.5s cast, single-target
+    DimensionalCollapse = 4213, // Helper->self, 6.0s cast, range 3 circle
+    ConvictionVisual = 4214, // SerHermenost->self, 5.2s cast, single-target
+    Conviction = 4215, // Helper->self, 8.0s cast, range 2 circle
     HermenostHit4216 = 4216, // Helper->self, no cast
     GuerriqueHit4217 = 4217, // SerGuerrique->self, no cast
-    GuerriqueCast4218 = 4218, // Helper->self, 2.7s cast
-    GuerriqueCast4219 = 4219, // Helper->self, 2.7s cast
-    GuerriqueCast4220 = 4220, // Helper->self, 2.7s cast
-    GuerriqueCast4221 = 4221, // Helper->self, 2.7s cast
-    VellguineCast = 4222, // SerVellguine->self, 2.7s cast
-    PaulecrainCast = 4223, // SerPaulecrain->self, 3.7s cast
-    AscalonCast4225 = 4225, // Helper->self, 5.7s cast
+    HeavyImpact1 = 4218, // Helper->self, 3.0s cast, range 6 circle
+    HeavyImpact2 = 4219, // Helper->self, 3.0s cast, range 12 circle
+    HeavyImpact3 = 4220, // Helper->self, 3.0s cast, range 18 circle
+    HeavyImpact4 = 4221, // Helper->self, 3.0s cast, range 27 circle
+    SpiralThrust = 4222, // SerVellguine->self, 3.0s cast, range 52+R width 12 rect
+    SpiralPierce = 4223, // SerPaulecrain->self, 4.0s cast, width 12 charge
+    AscalonMight = 4225, // Helper->self, 6.0s cast, range 80+R circle
     IgnasseHit = 4226, // SerIgnasse->self, no cast
-    CharibertCast4227 = 4227, // SerCharibert->self, 2.2s cast
-    CharibertCast4228 = 4228, // Helper->self, 2.7s cast
-    CharibertCast4229 = 4229, // Helper->self, 2.7s cast
-    CharibertCast4230 = 4230, // Helper->self, 2.7s cast
-    CharibertCast4231 = 4231, // Helper->self, 2.7s cast
+    HeavensflameVisual = 4227, // SerCharibert->self, 2.5s cast, single-target
+    Heavensflame1 = 4228, // Helper->self, 3.0s cast, range 3 circle
+    Heavensflame2 = 4229, // Helper->self, 3.0s cast, range 4 circle
+    Heavensflame3 = 4230, // Helper->self, 3.0s cast, range 5 circle
+    Heavensflame4 = 4231, // Helper->self, 3.0s cast, range 6 circle
     CharibertHit4232 = 4232, // Helper->self, no cast
-    HaumericCast = 4233, // SerHaumeric->self, 2.2s cast
+    HiemalStorm = 4233, // SerHaumeric->self, 2.5s cast, single-target
     HaumericHit = 4234, // Helper->self, no cast
-    NoudenetCast = 4235, // SerNoudenet->self, 2.7s cast
+    HolyMeteor = 4235, // SerNoudenet->self, 3.0s cast, single-target
 }
 
+public enum IconID : uint
+{
+    Icon29 = 29,
+}
+
+class TheDragonsGaze(BossModule module) : Components.CastGaze(module, AID.TheDragonsGaze);
+class SacredCross(BossModule module) : Components.RaidwideCast(module, AID.SacredCross);
+class DimensionalCollapse(BossModule module) : Components.StandardAOEs(module, AID.DimensionalCollapse, 3);
+class Conviction(BossModule module) : Components.StandardAOEs(module, AID.Conviction, 2);
+class HeavyImpact1(BossModule module) : Components.StandardAOEs(module, AID.HeavyImpact1, 6);
+class HeavyImpact2(BossModule module) : Components.StandardAOEs(module, AID.HeavyImpact2, 12);
+class HeavyImpact3(BossModule module) : Components.StandardAOEs(module, AID.HeavyImpact3, 18);
+class HeavyImpact4(BossModule module) : Components.StandardAOEs(module, AID.HeavyImpact4, 27);
+class SpiralThrust(BossModule module) : Components.StandardAOEs(module, AID.SpiralThrust, new AOEShapeRect(54.2f, 6));
+class Heavensflame1(BossModule module) : Components.StandardAOEs(module, AID.Heavensflame1, 3);
+class Heavensflame2(BossModule module) : Components.StandardAOEs(module, AID.Heavensflame2, 4);
+class Heavensflame3(BossModule module) : Components.StandardAOEs(module, AID.Heavensflame3, 5);
+class Heavensflame4(BossModule module) : Components.StandardAOEs(module, AID.Heavensflame4, 6);
+class AscalonMight(BossModule module) : Components.RaidwideCast(module, AID.AscalonMight);
 class Knights(BossModule module) : Components.AddsMulti(module, [
     OID.SerZephirin, OID.SerAdelphel, OID.SerJanlenoux, OID.SerVellguine, OID.SerPaulecrain, OID.SerIgnasse,
     OID.SerGrinnaux, OID.SerHermenost, OID.SerGuerrique, OID.SerCharibert, OID.SerHaumeric, OID.SerNoudenet,
@@ -72,6 +91,20 @@ class T03ThordanStates : StateMachineBuilder
     public T03ThordanStates(BossModule module) : base(module)
     {
         TrivialPhase()
+            .ActivateOnEnter<TheDragonsGaze>()
+            .ActivateOnEnter<SacredCross>()
+            .ActivateOnEnter<DimensionalCollapse>()
+            .ActivateOnEnter<Conviction>()
+            .ActivateOnEnter<HeavyImpact1>()
+            .ActivateOnEnter<HeavyImpact2>()
+            .ActivateOnEnter<HeavyImpact3>()
+            .ActivateOnEnter<HeavyImpact4>()
+            .ActivateOnEnter<SpiralThrust>()
+            .ActivateOnEnter<Heavensflame1>()
+            .ActivateOnEnter<Heavensflame2>()
+            .ActivateOnEnter<Heavensflame3>()
+            .ActivateOnEnter<Heavensflame4>()
+            .ActivateOnEnter<AscalonMight>()
             .ActivateOnEnter<Knights>();
     }
 }

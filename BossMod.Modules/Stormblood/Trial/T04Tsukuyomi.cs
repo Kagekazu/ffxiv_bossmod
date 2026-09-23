@@ -63,6 +63,18 @@ public enum AID : uint
     TormentUntoDeathRepeat = 11955, // Boss->player, 4.0s cast, range 15+R 90-degree cone tankbuster
 }
 
+public enum IconID : uint
+{
+    Icon230 = 230,
+    Icon305 = 305,
+}
+
+public enum TetherID : uint
+{
+    Tether12 = 12,
+    Tether17 = 17,
+}
+
 class Reprimand(BossModule module) : Components.RaidwideCast(module, AID.Reprimand);
 class Nightbloom(BossModule module) : Components.RaidwideCast(module, AID.Nightbloom);
 class NightbloomAdds(BossModule module) : Components.RaidwideCast(module, AID.NightbloomAdds);
