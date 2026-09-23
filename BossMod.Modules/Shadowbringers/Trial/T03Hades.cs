@@ -119,20 +119,44 @@ class Titanomachy(BossModule module) : Components.RaidwideCast(module, AID.Titan
 class ShadowStream(BossModule module) : Components.StandardAOEs(module, AID.ShadowStream, new AOEShapeRect(100, 8));
 class DualStrike(BossModule module) : Components.StandardAOEs(module, AID.DualStrike, 5);
 class WailOfTheLost(BossModule module) : Components.StandardAOEs(module, AID.WailOfTheLost, new AOEShapeRect(40, 20));
+class EchoOfTheLost(BossModule module) : Components.StandardAOEs(module, AID.EchoOfTheLost, new AOEShapeCone(100, 90.Degrees()));
+class EchoOfTheLost1(BossModule module) : Components.StandardAOEs(module, AID.EchoOfTheLost1, new AOEShapeCone(100, 90.Degrees()));
 class PolydegmonsPurgation(BossModule module) : Components.StandardAOEs(module, AID.PolydegmonsPurgation, new AOEShapeRect(100, 8));
 class PolydegmonsPurgation1(BossModule module) : Components.StandardAOEs(module, AID.PolydegmonsPurgation1, new AOEShapeRect(100, 8));
 class LifeInCaptivity(BossModule module) : Components.RaidwideCast(module, AID.LifeInCaptivity);
+class TheDarkDevours(BossModule module) : Components.RaidwideCastDelay(module, AID.TheDarkDevours, AID.TheDarkDevours1, 0.5f);
+class BlackCauldron(BossModule module) : Components.RaidwideInstant(module, AID.BlackCauldron1, 0.5f)
+{
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID == AID.BlackCauldron)
+            Activation = WorldState.FutureTime(Delay);
+        base.OnEventCast(caster, spell);
+    }
+}
 class ChorusOfTheLost(BossModule module) : Components.RaidwideCast(module, AID.ChorusOfTheLost);
+class ShadowAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.ShadowOfTheAncients, (uint)OID.ShadowOfTheAncients1, (uint)OID.AetherialGaol], 1);
 
 class T03HadesStates : StateMachineBuilder
 {
-    public T03HadesStates(BossModule module) : base(module)
+    private readonly T03Hades _module;
+
+    public T03HadesStates(T03Hades module) : base(module)
     {
-        TrivialPhase()
+        _module = module;
+        // P1 primary (0x2949) dies into P2 big Hades (0x294A) — without a second phase the module unloads and radar vanishes
+        SimplePhase(0, Phase1, "P1")
+            .Raw.Update = () => _module.BossP2() != null || Module.PrimaryActor.IsDeadOrDestroyed;
+        SimplePhase(1, Phase2, "P2")
+            .Raw.Update = () => Module.PrimaryActor.IsDeadOrDestroyed && (_module.BossP2()?.IsDead ?? false);
+    }
+
+    private void Phase1(uint id)
+    {
+        SimpleState(id, 10000, "P2")
             .ActivateOnEnter<RavenousAssault>()
             .ActivateOnEnter<ShadowSpread>()
             .ActivateOnEnter<ShadowSpread3>()
-            .ActivateOnEnter<HellbornYawp1>()
             .ActivateOnEnter<BadFaith>()
             .ActivateOnEnter<BadFaith1>()
             .ActivateOnEnter<DarkEruptionAOE>()
@@ -140,16 +164,37 @@ class T03HadesStates : StateMachineBuilder
             .ActivateOnEnter<AncientDarkness>()
             .ActivateOnEnter<AncientAero>()
             .ActivateOnEnter<AncientDarkIV>()
+            .ActivateOnEnter<ShadowAdds>();
+    }
+
+    private void Phase2(uint id)
+    {
+        SimpleState(id, 10000, "Enrage")
             .ActivateOnEnter<Titanomachy>()
             .ActivateOnEnter<ShadowStream>()
             .ActivateOnEnter<DualStrike>()
+            .ActivateOnEnter<EchoOfTheLost>()
+            .ActivateOnEnter<EchoOfTheLost1>()
             .ActivateOnEnter<WailOfTheLost>()
             .ActivateOnEnter<PolydegmonsPurgation>()
             .ActivateOnEnter<PolydegmonsPurgation1>()
+            .ActivateOnEnter<HellbornYawp1>()
+            .ActivateOnEnter<TheDarkDevours>()
+            .ActivateOnEnter<BlackCauldron>()
             .ActivateOnEnter<LifeInCaptivity>()
-            .ActivateOnEnter<ChorusOfTheLost>();
+            .ActivateOnEnter<ChorusOfTheLost>()
+            .ActivateOnEnter<ShadowAdds>();
     }
 }
 
 [ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 687, NameID = 8352)]
-public class T03Hades(WorldState ws, Actor primary) : BossModule(ws, primary, new(100, 100), new ArenaBoundsCircle(20));
+public class T03Hades(WorldState ws, Actor primary) : BossModule(ws, primary, new(100, 100), new ArenaBoundsCircle(20))
+{
+    public Actor? BossP2() => Enemies(OID.HadesBig).FirstOrDefault(a => !a.IsDestroyed);
+
+    protected override void DrawEnemies(int pcSlot, Actor pc)
+    {
+        Arena.Actor(PrimaryActor, ArenaColor.Enemy);
+        Arena.Actor(BossP2(), ArenaColor.Enemy);
+    }
+}
