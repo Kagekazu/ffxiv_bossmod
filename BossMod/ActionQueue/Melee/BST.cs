@@ -1,4 +1,6 @@
-﻿namespace BossMod.BST;
+﻿using System.Runtime.InteropServices;
+
+namespace BossMod.BST;
 
 public enum AID : uint
 {
@@ -84,8 +86,43 @@ public enum TraitID : uint
 public enum SID : uint
 {
     None = 0,
+    OneWithNature = 4601, // applied by First Battlehorn, Second Battlehorn, Third Battlehorn to self
+    LingeringVantage = 4614, // applied by Borrow, Borrow, Borrow, Borrow, Borrow, Borrow, Borrow, Borrow to self
+    EvasionUp = 2402, // applied by Cloud Skim, Cloud Skim to self
+    Vileskin = 4620, // applied by Vileskin to self
+    Beastskin = 4621, // applied by Beastskin to self
+    SeedsSown = 4622, // applied by Seedsower to target
+    Scaleskin = 4623, // applied by Scaleskin to self
 
-    OneWithNature = 4601, // applied by battlehorns to self, allows Borrow or Tempered Release
+    BeastKinship = 4644,
+    VileKinship = 4645,
+    CloudKinship = 4646,
+    SeedKinship = 4647,
+    WaveKinship = 4648,
+    ScaleKinship = 4649,
+    SoulKinship = 4650,
+    AshKinship = 4651,
+
+    VolantHeart = 4595,
+    RampantHeart = 4596,
+    DurantHeart = 4597,
+    EldritchHeart = 4598,
+    Sunstrider = 4599,
+    Moonstalker = 4600,
+    WaveringHeart = 4643,
+}
+
+public enum Kinship : byte
+{
+    None,
+    Beast,
+    Vile,
+    Cloud,
+    Seed,
+    Wave,
+    Scale,
+    Soul,
+    Ash
 }
 
 public sealed class Definitions : Defs
@@ -146,6 +183,7 @@ public sealed class Definitions : Defs
         d.RegisterSpell(AID.IntentionalComboMoonstalker);
         d.RegisterSpell(AID.InfinitiveComboUniversality);
 
+        d.RegisterSpell(AID.Challenge);
         d.RegisterSpell(AID.Snarl);
 
         Customize(d);
@@ -160,4 +198,35 @@ public sealed class Definitions : Defs
             d.Spell(AID.HawkishTalons)!.AllowExecute =
             d.Spell(AID.RisenFall)!.AllowExecute = ActionPredicate.AllowDashToTarget;
     }
+}
+
+public enum BeastmasterAffinity : byte
+{
+    None = 0,
+    Volant = 1,
+    Rampant = 2,
+    Durant = 3,
+    Eldritch = 4,
+    Sunstrider = 5,
+    Moonstalker = 6
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 0x18)]
+public struct BeastmasterGauge
+{
+    [FieldOffset(0x08)] public byte TPGauge;
+    [FieldOffset(0x09)] public byte FamiliarTPGauge;
+    [FieldOffset(0x0A)] public byte FamiliarTPAtLastUse;
+    [FieldOffset(0x0B)] public byte ActiveBattlehornIndex;
+    [FieldOffset(0x0C)] public byte InstinctualComboState;
+    [FieldOffset(0x0D)] public BeastmasterAffinity CurrentAffinity;
+    [FieldOffset(0x0E)] public byte ChainCount;
+    [FieldOffset(0x0F)] public byte KinshipState;
+    [FieldOffset(0x10)] public byte InstinctState;
+
+    public readonly byte KinshipBattlehornIndex => (byte)(KinshipState & 0b1111);
+    public readonly byte Classification => (byte)((KinshipState >> 4) & 0b1111);
+
+    public readonly byte NaturalInstinct => (byte)(InstinctState & 0b11);
+    public readonly byte MasteredInstinct => (byte)((InstinctState >> 2) & 0b11);
 }
