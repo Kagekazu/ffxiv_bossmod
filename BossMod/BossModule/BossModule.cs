@@ -360,7 +360,7 @@ public abstract class BossModule : IDisposable
             {
                 var toTarget = target.Position - enemy.Actor.Position;
                 var distToTarget = toTarget.Length() - enemy.Actor.HitboxRadius - target.HitboxRadius;
-                if (distToTarget > enemy.TankDistance)
+                if (distToTarget > enemy.TankDistance + 0.25f)
                 {
                     var movement = toTarget.Normalized() * (distToTarget - enemy.TankDistance);
                     Arena.AddLine(enemy.Actor.Position, enemy.Actor.Position + movement, 0xFFFFFF00);
@@ -485,6 +485,9 @@ public abstract class BossModule : IDisposable
             }
             Arena.Actor(player, color);
         }
+
+        if (WindowConfig.ShowPet && WorldState.Actors.Find(WorldState.Client.ActivePet.InstanceID) is { } pet)
+            Arena.Actor(pet, ArenaColor.Object);
     }
 
     private (BossComponent.PlayerPriority, uint) CalculateHighestPriority(int pcSlot, Actor pc, int playerSlot, Actor player)

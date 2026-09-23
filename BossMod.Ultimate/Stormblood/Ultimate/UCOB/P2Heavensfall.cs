@@ -17,17 +17,6 @@ class P2Heavensfall(BossModule module) : Heavensfall(module)
     }
 }
 
-class P3Heavensfall(BossModule module) : Heavensfall(module)
-{
-    public bool EnableHints;
-
-    public override void AddAIHints(int slot, Actor actor, Assignment assignment, AIHints hints)
-    {
-        if (EnableHints)
-            hints.AddForbiddenZone(Sdf.Continuous(ShapeDistance.Donut(Arena.Center, 8.5f, 10)).Inverted(), Activation);
-    }
-}
-
 class P2HeavensfallPillar(BossModule module) : Components.GenericAOEs(module)
 {
     private AOEInstance? _aoe;
@@ -59,27 +48,16 @@ class P2HeavensfallPillar(BossModule module) : Components.GenericAOEs(module)
 
 class P2ThermionicBurst(BossModule module) : Components.StandardAOEs(module, AID.ThermionicBurst, new AOEShapeCone(24.5f, 11.25f.Degrees()));
 
-class P2MeteorStream : Components.UniformStackSpread
+class MeteorStream(BossModule module) : Components.UniformStackSpread(module, 0, 4, alwaysShowSpreads: true)
 {
     public int NumCasts;
+}
 
-    public P2MeteorStream(BossModule module) : base(module, 0, 4, alwaysShowSpreads: true)
+class P2MeteorStream : MeteorStream
+{
+    public P2MeteorStream(BossModule module) : base(module)
     {
         AddSpreads(Raid.WithoutSlot(true), WorldState.FutureTime(5.6f));
-    }
-
-    public override void OnEventCast(Actor caster, ActorCastEvent spell)
-    {
-        if ((AID)spell.Action.ID == AID.MeteorStream)
-        {
-            ++NumCasts;
-            Spreads.RemoveAll(s => s.Target.InstanceID == spell.MainTargetID);
-
-            // update activation time for second set
-            if (NumCasts == 4)
-                for (var i = 0; i < 4; i++)
-                    Spreads.Ref(i).Activation = WorldState.FutureTime(3.1f);
-        }
     }
 
     public override void AddAIHints(int slot, Actor actor, Assignment assignment, AIHints hints)
@@ -104,6 +82,20 @@ class P2MeteorStream : Components.UniformStackSpread
         else
             base.AddAIHints(slot, actor, assignment, hints);
     }
+
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID == AID.MeteorStream)
+        {
+            ++NumCasts;
+            Spreads.RemoveAll(s => s.Target.InstanceID == spell.MainTargetID);
+
+            // update activation time for second set
+            if (NumCasts == 4)
+                for (var i = 0; i < Spreads.Count; i++)
+                    Spreads.Ref(i).Activation = WorldState.FutureTime(3.1f);
+        }
+    }
 }
 
 class P2HeavensfallDalamudDive(BossModule module) : Components.GenericBaitAway(module, AID.DalamudDive, true, true)
@@ -118,6 +110,14 @@ class P2HeavensfallDalamudDive(BossModule module) : Components.GenericBaitAway(m
             CurrentBaits.Add(new(_target, _target, _shape));
     }
 
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        base.OnEventCast(caster, spell);
+
+        if (spell.Action == WatchedAction)
+            CurrentBaits.Clear();
+    }
+
     public override void AddAIHints(int slot, Actor actor, Assignment assignment, AIHints hints)
     {
         if (!CurrentBaits.Any(b => b.Target == actor))
@@ -126,6 +126,9 @@ class P2HeavensfallDalamudDive(BossModule module) : Components.GenericBaitAway(m
         // preposition close to nael
         if (actor.Role is Role.Melee or Role.Tank)
             foreach (var b in ActiveBaitsNotOn(actor))
-                hints.GoalZones.Add(AIHints.GoalSingleTarget(b.Target.Position, 6));
+                hints.GoalZones.Add(AIHints.GoalSingleTarget(b.Target.Position, 6, 1));
+
+        if (NumCasts > 0 && Module.Enemies(OID.NaelDeusDarnus).FirstOrDefault() is { IsTargetable: false } nael)
+            hints.GoalZones.Add(AIHints.GoalSingleTarget(nael.Position, nael.HitboxRadius));
     }
 }

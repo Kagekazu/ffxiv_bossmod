@@ -9,7 +9,8 @@ class P1Plummet(BossModule module) : Components.Cleave(module, AID.Plummet, new 
         foreach (var (origin, target, angle) in OriginsAndTargets())
         {
             var originE = hints.FindEnemy(origin);
-            originE?.CanMove = false;
+            if (NextExpected < WorldState.FutureTime(1.5f))
+                originE?.CanMove = false;
 
             if (actor != target)
             {
@@ -34,7 +35,17 @@ class P1Plummet(BossModule module) : Components.Cleave(module, AID.Plummet, new 
 }
 class P2BahamutsClaw(BossModule module) : Components.CastCounter(module, AID.BahamutsClaw);
 class P3FlareBreath(BossModule module) : Components.Cleave(module, AID.FlareBreath, new AOEShapeCone(29.2f, 46.Degrees()), (uint)OID.BahamutPrime); // TODO: verify angle
-class P5MornAfah(BossModule module) : Components.StackWithCastTargets(module, AID.MornAfah, 4, 8); // TODO: verify radius
+class P5MornAfah(BossModule module) : Components.StackWithCastTargets(module, AID.MornAfah, 4, 8)
+{
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        if (Stacks.Count > 0 && Module.Enemies(OID.BahamutPrime).FirstOrDefault() is { } bp)
+        {
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(bp.Position, 2), Stacks[0].Activation);
+            hints.AddPredictedDamage(new(0xFF), Stacks[0].Activation);
+        }
+    }
+}
 
 [ModuleInfo(PrimaryActorOID = (uint)OID.Twintania, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 280, PlanLevel = 70)]
 public class UCOB(WorldState ws, Actor primary) : BossModule(ws, primary, new(0, 0), new ArenaBoundsCircle(21))
@@ -69,6 +80,9 @@ public class UCOB(WorldState ws, Actor primary) : BossModule(ws, primary, new(0,
     {
         base.CalculateModuleAIHints(slot, actor, assignment, hints);
 
+        // TODO: pathfinder doesn't try to move out of blocked pixels unless the destination has a goal value > 0
+        // we can run into blocked pixels e.g. when baiting p2 divebombs since they have to be close to the edge
+        // this should be fixed in navigationdecision
         hints.GoalZones.Add(_ => 0.1f);
     }
 }

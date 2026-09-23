@@ -58,6 +58,12 @@ class Quote(BossModule module) : BossComponent(module)
             NextActivation = WorldState.FutureTime(3.1f);
         }
     }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        if (PendingMechanics is [_, AID.ThermionicBeam, ..] && Source != null)
+            hints.GoalZones.Add(AIHints.GoalProximity(Source.Position, 10, 1));
+    }
 }
 
 class QuoteIronChariotLunarDynamo(BossModule module) : Components.GenericAOEs(module)
@@ -77,6 +83,17 @@ class QuoteIronChariotLunarDynamo(BossModule module) : Components.GenericAOEs(mo
         } : null;
         if (shape != null && _quote?.Source != null)
             yield return new(shape, _quote.Source.Position, default, _quote.NextActivation);
+    }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        foreach (var shape in ActiveAOEs(slot, actor))
+        {
+            if (shape.Shape is AOEShapeDonut d)
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(shape.Origin, d.InnerRadius), shape.Activation);
+            else
+                hints.AddForbiddenZone(shape.Distance, shape.Activation);
+        }
     }
 }
 

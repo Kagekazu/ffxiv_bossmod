@@ -204,9 +204,9 @@ public sealed class NormalMovement(RotationModuleManager manager, Actor player) 
             if (enemy.DesiredRotation is { } rot)
             {
                 var dist = (enemy.Actor.Position - Player.Position).Length();
-                var goal = enemy.Actor.Position + rot.ToDirection() * dist;
+                var goal = enemy.Actor.Position + rot.ToDirection() * enemy.Actor.HitboxRadius;
                 var sh = ShapeDistance.PrecisePosition(goal, new(0, 1), Hints.PathfindMapBounds.MapResolution, Player.Position, 0.1f);
-                Hints.GoalZones.Add(p => sh(p) > 0 ? 0.5f : 0);
+                Hints.GoalZones.Add(p => sh(p) >= 0 ? 0.5f : 0);
             }
         }
 
@@ -328,7 +328,6 @@ public sealed class NormalMovement(RotationModuleManager manager, Actor player) 
         if (distSq <= 0.01f)
         {
             // we're already very close to destination
-            // TODO: what should we do if forced-movement is already set to something?.. not sure who could set it, some other module?..
             Hints.ForcedMovement = default;
             return;
         }

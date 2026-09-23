@@ -39,6 +39,7 @@ public sealed class AIHints
         public float TankDistance = 2; // enemy will start moving if distance between hitboxes is bigger than this
         public bool ShouldBeTanked; // tank AI will try to tank this enemy
         public bool PreferProvoking; // tank AI will provoke enemy if not targeted
+        public bool PreferShirking; // TODO: better name
         public bool ForbidDOTs; // if true, dots on target are forbidden
         public bool ShouldBeInterrupted; // if set and enemy is casting interruptible spell, some ranged/tank will try to interrupt
         public bool ShouldBeStunned; // if set, AI will stun if possible
@@ -473,7 +474,7 @@ public sealed class AIHints
 
         // try to stay within pull range
         if (dirToGoal.LengthSq() <= leewaySq)
-            return GoalSingleTarget(target.Position, adjRange, 0.5f);
+            return GoalSingleTarget(target.Position, adjRange, 0.1f);
 
         var distance = distToGoal;
         if (gcd < 0.5f)
@@ -483,6 +484,6 @@ public sealed class AIHints
         }
 
         var sh = ShapeDistance.PrecisePosition(target.Position + dirToGoal.Normalized() * distToGoal, new(0, 1), PathfindMapBounds.MapResolution, player.Position, 0.1f);
-        return p => sh(p) > 0 ? 10 : 0;
+        return p => sh(p) >= 0 ? 10 : 0;
     }
 }

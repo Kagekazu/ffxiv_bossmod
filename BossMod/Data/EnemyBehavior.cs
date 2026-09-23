@@ -1,6 +1,6 @@
 ﻿namespace BossMod.Data;
 
-public static class AggroDistance
+public static class EnemyBehavior
 {
     public record struct AggroData(uint Territory, uint NameID, float Distance, string EnglishName);
 
@@ -8,7 +8,7 @@ public static class AggroDistance
 
     private static readonly List<AggroData> _data = [];
 
-    static AggroDistance()
+    static EnemyBehavior()
     {
         using var reader = Utils.LoadResource("BossMod.Data.AggroDistance.dat");
         string? s;
@@ -27,7 +27,26 @@ public static class AggroDistance
         }
     }
 
-    public static bool TryGet(uint territory, uint name, out float distance)
+    // distance is between hitboxes
+    public static readonly Dictionary<uint, float> TankDistance = new()
+    {
+        // Twintania/Nael/Bahamut (UCOB)
+        [0x1FDF] = 0,
+        [0x1FE1] = 0,
+        [0x1FE8] = 0,
+    };
+
+    public static bool TryGetTankDistance(uint oid, out float distance) => TankDistance.TryGetValue(oid, out distance);
+
+    // TODO check sheets
+    public static readonly HashSet<uint> MovementDisabled = [
+        0x4B8E,
+        0x4CDC,
+        0x4DD4,
+        0x4CF8
+    ];
+
+    public static bool TryGetAggroDistance(uint territory, uint name, out float distance)
     {
         var ix = _data.FindIndex(d => d.Territory == territory && d.NameID == name);
         if (ix >= 0)

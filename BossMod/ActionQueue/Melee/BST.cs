@@ -1,4 +1,6 @@
-﻿namespace BossMod.BST;
+﻿using System.Runtime.InteropServices;
+
+namespace BossMod.BST;
 
 public enum AID : uint
 {
@@ -16,12 +18,12 @@ public enum AID : uint
     MistralAxe = 44887, // L8, instant, 5.0s CD (group 15), range 3, single-target, targets=Hostile, animLock=???
     SpinningAxe = 44888, // L14, instant, 5.0s CD (group 15), range 3, single-target, targets=Hostile, animLock=???
     GaleAxe = 44889, // L16, instant, 5.0s CD (group 15), range 3, single-target, targets=Hostile, animLock=???
-    TemperedRelease1 = 44890, // L18, instant, 30.0s CD (group 6), range 0, single-target, targets=Self, animLock=???
+    TemperedReleasePlaceholder = 44890, // L18, instant, 30.0s CD (group 6), range 0, single-target, targets=Self, animLock=???
     PartingBlow = 44891, // L6, instant, 10.0s CD (group 2), range 25, single-target, targets=Hostile, animLock=???
     SecondBattlehorn = 44892, // L10, 1.0s cast, 2.0s CD (group 4), range 0, single-target, targets=Self, animLock=???
     ShieldCharge = 44893, // L24, instant, 60.0s CD (group 19/70), range 20, AOE 6 circle, targets=Hostile, animLock=???
     ThirdBattlehorn = 44894, // L20, 1.0s cast, 2.0s CD (group 5), range 0, single-target, targets=Self, animLock=???
-    TemperedRelease2 = 47092, // L18, instant, 30.0s CD (group 6), range 30, single-target, targets=Hostile, animLock=???
+    TemperedRelease = 47092, // L18, instant, 30.0s CD (group 6), range 30, single-target, targets=Hostile, animLock=???
     Trick = 47093, // L8, instant, 3.0s CD (group 18), range 30, single-target, targets=Hostile, animLock=???
     Borrow = 44895, // L22, instant, 30.0s CD (group 7), range 0, single-target, targets=Self, animLock=???
     BorrowBeast = 47238, // L22, instant, 30.0s CD (group 7), range 0, single-target, targets=Self, animLock=???
@@ -57,6 +59,9 @@ public enum AID : uint
     IntentionalComboSunstrider = 44914, // L8, instant, range 100, single-target, targets=Hostile, animLock=0 (triggered)
     IntentionalComboMoonstalker = 44915, // L8, instant, range 100, single-target, targets=Hostile, animLock=0 (triggered)
     InfinitiveComboUniversality = 44916, // L50, instant, range 100, single-target, targets=Hostile, animLock=0 (triggered)
+
+    Challenge = 46750, // crucible provoke
+    Snarl = 46751, // crucible shirk + cover
 }
 
 public enum TraitID : uint
@@ -81,6 +86,43 @@ public enum TraitID : uint
 public enum SID : uint
 {
     None = 0,
+    OneWithNature = 4601, // applied by First Battlehorn, Second Battlehorn, Third Battlehorn to self
+    LingeringVantage = 4614, // applied by Borrow, Borrow, Borrow, Borrow, Borrow, Borrow, Borrow, Borrow to self
+    EvasionUp = 2402, // applied by Cloud Skim, Cloud Skim to self
+    Vileskin = 4620, // applied by Vileskin to self
+    Beastskin = 4621, // applied by Beastskin to self
+    SeedsSown = 4622, // applied by Seedsower to target
+    Scaleskin = 4623, // applied by Scaleskin to self
+
+    BeastKinship = 4644,
+    VileKinship = 4645,
+    CloudKinship = 4646,
+    SeedKinship = 4647,
+    WaveKinship = 4648,
+    ScaleKinship = 4649,
+    SoulKinship = 4650,
+    AshKinship = 4651,
+
+    VolantHeart = 4595,
+    RampantHeart = 4596,
+    DurantHeart = 4597,
+    EldritchHeart = 4598,
+    Sunstrider = 4599,
+    Moonstalker = 4600,
+    WaveringHeart = 4643,
+}
+
+public enum Kinship : byte
+{
+    None,
+    Beast,
+    Vile,
+    Cloud,
+    Seed,
+    Wave,
+    Scale,
+    Soul,
+    Ash
 }
 
 public sealed class Definitions : Defs
@@ -100,8 +142,8 @@ public sealed class Definitions : Defs
         d.RegisterSpell(AID.Shieldsplitter); // animLock=???
         d.RegisterSpell(AID.SpinningAxe); // animLock=???
         d.RegisterSpell(AID.GaleAxe); // animLock=???
-        d.RegisterSpell(AID.TemperedRelease1); // animLock=???
-        d.RegisterSpell(AID.TemperedRelease2); // animLock=???
+        d.RegisterSpell(AID.TemperedReleasePlaceholder); // animLock=???
+        d.RegisterSpell(AID.TemperedRelease); // animLock=???
         d.RegisterSpell(AID.ThirdBattlehorn); // animLock=???
         d.RegisterSpell(AID.Borrow); // animLock=???
         d.RegisterSpell(AID.BorrowBeast); // animLock=???
@@ -141,11 +183,50 @@ public sealed class Definitions : Defs
         d.RegisterSpell(AID.IntentionalComboMoonstalker);
         d.RegisterSpell(AID.InfinitiveComboUniversality);
 
+        d.RegisterSpell(AID.Challenge);
+        d.RegisterSpell(AID.Snarl);
+
         Customize(d);
     }
 
     private void Customize(ActionDefinitions d)
     {
+        d.RegisterChargeIncreaseTrait(AID.ShieldCharge, TraitID.EnhancedShieldCharge);
 
+        d.Spell(AID.ShieldCharge)!.AllowExecute =
+            d.Spell(AID.BrutalRage)!.AllowExecute =
+            d.Spell(AID.HawkishTalons)!.AllowExecute =
+            d.Spell(AID.RisenFall)!.AllowExecute = ActionPredicate.AllowDashToTarget;
     }
+}
+
+public enum BeastmasterAffinity : byte
+{
+    None = 0,
+    Volant = 1,
+    Rampant = 2,
+    Durant = 3,
+    Eldritch = 4,
+    Sunstrider = 5,
+    Moonstalker = 6
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 0x18)]
+public struct BeastmasterGauge
+{
+    [FieldOffset(0x08)] public byte TPGauge;
+    [FieldOffset(0x09)] public byte FamiliarTPGauge;
+    [FieldOffset(0x0A)] public byte FamiliarTPAtLastUse;
+    [FieldOffset(0x0B)] public byte ActiveBattlehornIndex;
+    [FieldOffset(0x0C)] public byte InstinctualComboState;
+    [FieldOffset(0x0D)] public BeastmasterAffinity CurrentAffinity;
+    [FieldOffset(0x0E)] public byte ChainCount;
+    [FieldOffset(0x0F)] public byte KinshipState;
+    [FieldOffset(0x10)] public byte InstinctState;
+
+    public readonly byte KinshipBattlehornIndex => (byte)(KinshipState & 0b1111);
+    public readonly byte Classification => (byte)((KinshipState >> 4) & 0b1111);
+
+    public readonly byte NaturalInstinct => (byte)(InstinctState & 0b11);
+    public readonly byte MasteredInstinct => (byte)((InstinctState >> 2) & 0b11);
 }
