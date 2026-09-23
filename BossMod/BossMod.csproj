@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>7.5.6.6</Version>
+    <Version>7.5.6.9</Version>
   </PropertyGroup>
 
   <Import Project="..\Common.targets" />
@@ -16,6 +16,7 @@
     <AssemblyAttribute Include="DalamudLibPath">
       <_Parameter1>$(DalamudLibPath)</_Parameter1>
     </AssemblyAttribute>
+    <!-- <ProjectReference Include="..\..\DalaMock\DalaMock\DalaMock.Core.csproj" /> -->
     <PackageReference Include="DalaMock.Core" Version="6.1.9" />
   </ItemGroup>
 

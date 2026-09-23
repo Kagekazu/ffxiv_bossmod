@@ -142,7 +142,7 @@ public sealed unsafe class ActionManagerEx : IAmex
         if (AutoQueue.Delay > 0)
             AutoQueue = default;
 
-        if (AutoQueue.Priority < ActionQueue.Priority.ManualEmergency)
+        if (AutoQueue.Priority < ActionQueue.Priority.ManualEmergency && !AutoQueue.Force)
         {
             if (Config.PyreticThreshold > 0 && _hints.ImminentSpecialMode.mode == AIHints.SpecialMode.Pyretic && _hints.ImminentSpecialMode.activation < _ws.FutureTime(Config.PyreticThreshold + ApplicationDelay.Get(AutoQueue.Action)))
                 AutoQueue = default; // do not execute non-emergency actions when pyretic is imminent
@@ -415,6 +415,17 @@ public sealed unsafe class ActionManagerEx : IAmex
         return _smartRotationTweak.GetSafeRotation(current, idealOrientation, isCasting ? 75.Degrees() : 45.Degrees());
     }
 
+    private static bool IsGCD(ActionID action)
+    {
+        if (action.Type != ActionType.Spell)
+            return false;
+
+        if (Service.LuminaRow<Lumina.Excel.Sheets.Action>(action.ID) is not { } row)
+            return false;
+
+        return row.CooldownGroup == 58 || row.AdditionalCooldownGroup == 58;
+    }
+
     private void UpdateDetour(ActionManager* self)
     {
         var fwk = Framework.Instance();
@@ -429,10 +440,13 @@ public sealed unsafe class ActionManagerEx : IAmex
         // check whether movement is safe; block movement if not and if desired
         MoveMightInterruptCast &= CastTimeRemaining > 0; // previous cast could have ended without action effect
         // if we're not casting, but will start soon, moving might interrupt future cast
-        MoveMightInterruptCast |= imminentActionAdj && CastTimeRemaining <= 0 && _inst->AnimationLock < 0.1f && GetAdjustedCastTime(imminentActionAdj) > 0 && !CanMoveWhileCasting(imminentActionAdj) && GCD() < 0.1f;
+        MoveMightInterruptCast |= imminentActionAdj && CastTimeRemaining <= 0 && _inst->AnimationLock < 0.1f && GetAdjustedCastTime(imminentActionAdj) > 0 && !CanMoveWhileCasting(imminentActionAdj) && (!IsGCD(imminentActionAdj) || GCD() < 0.1f);
 
-        var blockMovement = Config.PreventMovingWhileCasting && MoveMightInterruptCast && _ws.Party.Player()?.MountId == 0;
-        blockMovement |= Config.PyreticThreshold > 0 && _hints.ImminentSpecialMode.mode is AIHints.SpecialMode.Pyretic or AIHints.SpecialMode.PyreticMove && _hints.ImminentSpecialMode.activation < _ws.FutureTime(Config.PyreticThreshold);
+        var blockMovementCast = Config.PreventMovingWhileCasting && MoveMightInterruptCast && _ws.Party.Player()?.MountId == 0;
+
+        var blockMovementStillness = Config.PyreticThreshold > 0 && _hints.ImminentSpecialMode.mode is AIHints.SpecialMode.Pyretic or AIHints.SpecialMode.PyreticMove && _hints.ImminentSpecialMode.activation < _ws.FutureTime(Config.PyreticThreshold);
+
+        var blockMovement = blockMovementCast || blockMovementStillness;
 
         // note: if we cancel movement and start casting immediately, it will be canceled some time later - instead prefer to delay for one frame
         var actionImminent = EffectiveAnimationLock <= 0 && AutoQueue.Action && !IsRecastTimerActive(AutoQueue.Action) && !(blockMovement && _movement.IsMoving());
@@ -469,17 +483,21 @@ public sealed unsafe class ActionManagerEx : IAmex
             else
             {
                 Service.Log($"[AMEx] Can't execute prio {AutoQueue.Priority} action {AutoQueue.Action} (=> {actionAdj}) @ {targetID:X}: status {status} '{Service.LuminaRow<Lumina.Excel.Sheets.LogMessage>(status)?.Text}'");
-                blockMovement = false;
+                blockMovementCast = blockMovementStillness = false;
             }
         }
 
         autoRotateConfig->Value.UInt = autoRotateOriginal;
         _cooldownTweak.StopAdjustment(); // clear any potential adjustments
-        _movement.MovementBlocked = blockMovement;
 
-        // TODO: what's the reason to do it in AM update, rather than plugin's executehints?..
+        // doing it here so we can unblock movement early; cast canceling is serverside but movement is not
         if (_ws.Party.Player()?.CastInfo != null && _cancelCastTweak.ShouldCancel(_ws.CurrentTime, _hints.ForceCancelCast))
+        {
             UIState.Instance()->Hotbar.CancelCast();
+            blockMovementCast = false;
+        }
+
+        _movement.MovementBlocked = blockMovementCast || blockMovementStillness;
 
         if (!GameMain.IsInPvPArea() && !Service.Condition.Any(ConditionFlag.DutyRecorderPlayback, ConditionFlag.InThisState89))
         {
