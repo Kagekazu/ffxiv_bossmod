@@ -2,6 +2,12 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows7.0": {
+      "CsvHelper": {
+        "type": "Direct",
+        "requested": "[33.1.0, )",
+        "resolved": "33.1.0",
+        "contentHash": "kqfTOZGrn7NarNeXgjh86JcpTHUoeQDMB8t9NVa/ZtlSYiV1rxfRnQ49WaJsob4AiGrbK0XDzpyKkBwai4F8eg=="
+      },
       "DalaMock.Core": {
         "type": "Direct",
         "requested": "[6.1.9, )",
@@ -574,6 +580,15 @@
         "type": "Transitive",
         "resolved": "1.4.25",
         "contentHash": "V2yJMl/QKceXEjYEnf2EWcNkUJI5/zE04cNUnawHbdR0wjMHv1dVTLf0IUJk0D0w29FrCWdQQK/n4L4vx0HeQA=="
+      },
+      "ffxivclientstructs": {
+        "type": "Project",
+        "dependencies": {
+          "InteropGenerator.Runtime": "[1.0.0, )"
+        }
+      },
+      "interopgenerator.runtime": {
+        "type": "Project"
       }
     }
   }
