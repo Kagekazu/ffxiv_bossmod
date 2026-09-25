@@ -55,7 +55,7 @@ public enum AID : uint
     UnmovingTroikaThird = 11437, // Helper->self, 2.1s cast, range 9+R cone
     NightbloomYotsuyu = 11438, // Yotsuyu->self, no cast, single-target
     NightbloomAdds = 11440, // Helper->self, 4.0s cast, range 60 circle
-    Unknown11441 = 11441, // Helper->self, no cast
+    LeadOfTheUnderworldMarker = 11441, // Helper->player, no cast, Lead of the Underworld marker
     Unknown11471 = 11471, // Boss->self, no cast
     Unknown11478 = 11478, // SpecterOfGosetsu->self, no cast
     DanceOfTheDead = 11551, // Helper->self, no cast, single-target
@@ -65,8 +65,22 @@ public enum AID : uint
 
 public enum IconID : uint
 {
-    Icon230 = 230,
-    Icon305 = 305,
+    LunacyStack = 305,
+}
+
+public enum SID : uint
+{
+    VulnerabilityUp = 202,
+    DownForTheCount = 783,
+    Haunt1 = 1542,
+    Grudge = 1573,
+    Stun = 149,
+    Haunt2 = 1543,
+    Moonshadowed = 1539,
+    Moonlit = 1538,
+    Doom = 210,
+    Bleeding = 642,
+    BloodMoon = 1537,
 }
 
 public enum TetherID : uint
@@ -80,6 +94,7 @@ class Nightbloom(BossModule module) : Components.RaidwideCast(module, AID.Nightb
 class NightbloomAdds(BossModule module) : Components.RaidwideCast(module, AID.NightbloomAdds);
 class Antitwilight(BossModule module) : Components.RaidwideCast(module, AID.Antitwilight);
 class ToAshes(BossModule module) : Components.RaidwideCast(module, AID.ToAshes, "Kill Midnight Haze or raidwide");
+class DanceOfTheDead(BossModule module) : Components.RaidwideInstant(module, AID.DanceOfTheDeadRaidwide, 0);
 
 class TormentUntoDeath(BossModule module) : Components.GenericBaitAway(module, damageType: AIHints.PredictedDamageType.Tankbuster)
 {
@@ -98,40 +113,50 @@ class TormentUntoDeath(BossModule module) : Components.GenericBaitAway(module, d
     }
 }
 
-class LeadOfTheUnderworld(BossModule module) : Components.BaitAwayCast(module, AID.LeadOfTheUnderworld, new AOEShapeRect(43.25f, 4f));
-class SteelOfTheUnderworld(BossModule module) : Components.StandardAOEs(module, AID.SteelOfTheUnderworld, new AOEShapeCone(43.25f, 45.Degrees()));
-class TsukiNoMaiogi(BossModule module) : Components.StandardAOEs(module, AID.TsukiNoMaiogi, 10);
-class DarkBlade(BossModule module) : Components.StandardAOEs(module, AID.DarkBlade, new AOEShapeCone(43.25f, 105.Degrees()));
-class BrightBlade(BossModule module) : Components.StandardAOEs(module, AID.BrightBlade, new AOEShapeCone(43.25f, 105.Degrees()));
-class Lunacy(BossModule module) : Components.StackWithCastTargets(module, AID.Lunacy, 6);
-class LunarHalo(BossModule module) : Components.StandardAOEs(module, AID.LunarHalo, new AOEShapeDonut(2f, 15f));
-class UnmovingTroikaSecond(BossModule module) : Components.StandardAOEs(module, AID.UnmovingTroikaSecond, new AOEShapeCone(9.5f, 60.Degrees()));
-class UnmovingTroikaThird(BossModule module) : Components.StandardAOEs(module, AID.UnmovingTroikaThird, new AOEShapeCone(9.5f, 60.Degrees()));
+class LeadOfTheUnderworld(BossModule module) : Components.SimpleLineStack(module, 4, 70, AID.LeadOfTheUnderworldMarker, AID.LeadOfTheUnderworld, 5);
+class SteelOfTheUnderworld(BossModule module) : Components.StandardAOEs(module, AID.SteelOfTheUnderworld, new AOEShapeCone(70, 45.Degrees()));
+class TsukiNoMaiogi(BossModule module) : Components.StandardAOEs(module, AID.TsukiNoMaiogi, 10, maxCasts: 7);
+class DarkBladeBrightBlade(BossModule module) : Components.GroupedAOEs(module, [AID.DarkBlade, AID.BrightBlade], new AOEShapeCone(70, 105.Degrees()));
+class Lunacy(BossModule module) : Components.StackWithCastTargets(module, AID.Lunacy, 6, 8, 8);
+class LunarHalo(BossModule module) : Components.StandardAOEs(module, AID.LunarHalo, new AOEShapeDonut(2, 15));
+class UnmovingTroikaSecond(BossModule module) : Components.StandardAOEs(module, AID.UnmovingTroikaSecond, new AOEShapeCone(39, 37.5f.Degrees()));
+class UnmovingTroikaThird(BossModule module) : Components.StandardAOEs(module, AID.UnmovingTroikaThird, new AOEShapeCone(39, 37.5f.Degrees()));
 class MidnightHazeAdds(BossModule module) : Components.Adds(module, (uint)OID.MidnightHaze, 2);
 class SpecterAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.SpecterOfThePatriarch, (uint)OID.SpecterOfTheMatriarch, (uint)OID.SpecterOfAsahi, (uint)OID.SpecterOfZenos, (uint)OID.SpecterOfGosetsu, (uint)OID.SpecterOfTheHomeland, (uint)OID.SpecterOfTheEmpire], 1);
+
+class MoonStatus(BossModule module) : BossComponent(module)
+{
+    public override void AddGlobalHints(GlobalHints hints)
+    {
+        var pc = Raid.Player();
+        if (pc != null && (pc.FindStatus(SID.Moonlit) is { Extra: >= 3 } || pc.FindStatus(SID.Moonshadowed) is { Extra: >= 3 }))
+            hints.Add("Swap sides to drop moon stacks!");
+    }
+}
 
 class T04TsukuyomiStates : StateMachineBuilder
 {
     public T04TsukuyomiStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<Reprimand>()
-            .ActivateOnEnter<Nightbloom>()
-            .ActivateOnEnter<NightbloomAdds>()
-            .ActivateOnEnter<Antitwilight>()
-            .ActivateOnEnter<ToAshes>()
-            .ActivateOnEnter<TormentUntoDeath>()
-            .ActivateOnEnter<LeadOfTheUnderworld>()
-            .ActivateOnEnter<SteelOfTheUnderworld>()
             .ActivateOnEnter<TsukiNoMaiogi>()
-            .ActivateOnEnter<DarkBlade>()
-            .ActivateOnEnter<BrightBlade>()
-            .ActivateOnEnter<Lunacy>()
-            .ActivateOnEnter<LunarHalo>()
+            .ActivateOnEnter<TormentUntoDeath>()
+            .ActivateOnEnter<SteelOfTheUnderworld>()
+            .ActivateOnEnter<Reprimand>()
+            .ActivateOnEnter<MidnightHazeAdds>()
+            .ActivateOnEnter<LeadOfTheUnderworld>()
+            .ActivateOnEnter<Nightbloom>()
+            .ActivateOnEnter<SpecterAdds>()
             .ActivateOnEnter<UnmovingTroikaSecond>()
             .ActivateOnEnter<UnmovingTroikaThird>()
-            .ActivateOnEnter<MidnightHazeAdds>()
-            .ActivateOnEnter<SpecterAdds>();
+            .ActivateOnEnter<NightbloomAdds>()
+            .ActivateOnEnter<LunarHalo>()
+            .ActivateOnEnter<Antitwilight>()
+            .ActivateOnEnter<MoonStatus>()
+            .ActivateOnEnter<Lunacy>()
+            .ActivateOnEnter<DanceOfTheDead>()
+            .ActivateOnEnter<DarkBladeBrightBlade>()
+            .ActivateOnEnter<ToAshes>();
     }
 }
 

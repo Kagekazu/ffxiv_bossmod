@@ -13,12 +13,13 @@ public enum OID : uint
     InnocenceAdd = 0x2BED, // R2.800
     ForgivenShame2 = 0x2BEE, // R0.960
     ForgivenVenery2 = 0x2BEF, // R1.500
+    MeteorTower = 0x1EAD40, // R0.500, EventObj
 }
 
 public enum AID : uint
 {
     AutoAttack = 870, // ForgivenShame/Venery->player, no cast, single-target
-    Unknown14588 = 14588, // Helper->self, no cast
+    LightPillarMarker = 14588, // Helper->player, no cast, single-target
     AutoAttackBoss = 16016, // Boss->player, no cast, single-target
     Unknown16017 = 16017, // Boss->self, no cast
     Unknown16018 = 16018, // Boss->self, no cast
@@ -60,9 +61,8 @@ public enum AID : uint
     ReprobationLong = 16075, // Helper->self, 1.5s cast, range 42 width 4 rect
     Shadowreaver = 16106, // BossP2->self, 5.0s cast, range 40 circle
     ExaltedPlumes = 16114, // Helper->self, no cast, range 40 circle
-    Unknown16121 = 16121, // Helper->self, no cast
-    Unknown16122 = 16122, // Helper->self, no cast
-    LightPillarCast = 16190, // BossP2->self, 5.0s cast, single-target
+    SoulAndBodyInstant1 = 16121, // Helper->self, no cast, range ?-20 donut
+    SoulAndBodyInstant2 = 16122, // Helper->self, no cast, range ?-20 donut
     Unknown16197 = 16197, // Helper->self, no cast
     WingedReprobation = 16572, // BossP2->self, 3.0s cast, single-target
     Unknown16708 = 16708, // Boss->self, no cast
@@ -73,12 +73,13 @@ public enum AID : uint
     HolySwordAdd = 18065, // ForgivenVenery2->ForgivenShame2, 9.0s cast, single-target
     GuiltyVerdict = 18066, // ForgivenVenery2->self, no cast, range 50 circle
     Unknown18184 = 18184, // Helper->self, no cast
+    LightPillarCast = 16190, // BossP2->self, 5.0s cast, single-target
 }
 
 public enum IconID : uint
 {
-    Stack = 138,
-    Spread = 218,
+    DropOfLight = 138,
+    Tankbuster = 218,
 }
 
 public enum TetherID : uint
@@ -91,20 +92,51 @@ class Realmrazer(BossModule module) : Components.RaidwideCastDelay(module, AID.R
 class DaybreakAOE(BossModule module) : Components.StandardAOEs(module, AID.DaybreakAOE, 6);
 class ScoldsBridle(BossModule module) : Components.RaidwideCast(module, AID.ScoldsBridle);
 class HolySword(BossModule module) : Components.SingleTargetCast(module, AID.HolySword);
-class RighteousBolt(BossModule module) : Components.SingleTargetCast(module, AID.RighteousBolt);
-class SoulAndBody1(BossModule module) : Components.StandardAOEs(module, AID.SoulAndBody1, new AOEShapeDonut(5, 20));
-class SoulAndBody2(BossModule module) : Components.StandardAOEs(module, AID.SoulAndBody2, new AOEShapeDonut(5, 20));
+class RighteousBolt(BossModule module) : Components.BaitAwayCast(module, AID.RighteousBolt, new AOEShapeCircle(3), centerAtTarget: true, endsOnCastEvent: true);
+class SoulAndBody(BossModule module) : Components.GroupedAOEs(module, [AID.SoulAndBody1, AID.SoulAndBody2], new AOEShapeDonut(5, 20));
 class HolyTrinity(BossModule module) : Components.StandardAOEs(module, AID.HolyTrinity, new AOEShapeRect(40, 2));
 class ReprobationLine(BossModule module) : Components.StandardAOEs(module, AID.ReprobationLine, new AOEShapeRect(21, 2));
 class ReprobationLong(BossModule module) : Components.StandardAOEs(module, AID.ReprobationLong, new AOEShapeRect(42, 2));
 class GodRayCone(BossModule module) : Components.StandardAOEs(module, AID.GodRayCone, new AOEShapeCone(5, 50.Degrees()));
 class GodRayDonut1(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut1, new AOEShapeDonutSector(5, 10, 50.Degrees()));
 class GodRayDonut2(BossModule module) : Components.StandardAOEs(module, AID.GodRayDonut2, new AOEShapeDonutSector(10, 20, 50.Degrees()));
-class BeatificVision(BossModule module) : Components.StandardAOEs(module, AID.BeatificVision, new AOEShapeRect(45, 20));
+class BeatificVision(BossModule module) : Components.StandardAOEs(module, AID.BeatificVision, new AOEShapeRect(45, 15));
 class Shadowreaver(BossModule module) : Components.RaidwideCast(module, AID.Shadowreaver);
 class Manacle(BossModule module) : Components.StandardAOEs(module, AID.Manacle, 6);
 class HolySwordAdd(BossModule module) : Components.SingleTargetCast(module, AID.HolySwordAdd, "Interrupt add");
-class InnocenceAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.ForgivenShame, (uint)OID.ForgivenVenery, (uint)OID.ForgivenShame2, (uint)OID.ForgivenVenery2], 1);
+class DropOfLight(BossModule module) : Components.BaitAwayIcon(module, new AOEShapeCircle(10), (uint)IconID.DropOfLight, AID.DropOfLight, 5.1f, centerAtTarget: true);
+class LightPillar(BossModule module) : Components.SimpleLineStack(module, 3, 40, AID.LightPillarMarker, AID.LightPillar, 4.7f);
+class InnocenceAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.ForgivenShame, (uint)OID.ForgivenVenery, (uint)OID.ForgivenShame2, (uint)OID.ForgivenVenery2, (uint)OID.NailOfCondemnation, (uint)OID.SwordOfCondemnation], 1);
+
+class SinSphere(BossModule module) : Components.GenericTowers(module)
+{
+    public override void OnActorCreated(Actor actor)
+    {
+        if (actor.OID == (uint)OID.MeteorTower)
+            Towers.Add(new(actor.Position, 5, 1, 2));
+    }
+
+    public override void OnActorDestroyed(Actor actor)
+    {
+        base.OnActorDestroyed(actor);
+        if (actor.OID == (uint)OID.MeteorTower)
+            Towers.Clear();
+    }
+}
+
+class InstantRaidwide(BossModule module, AID aid) : Components.RaidwideInstant(module, aid, 0.1f)
+{
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if (spell.Action == WatchedAction)
+            Activation = WorldState.FutureTime(Delay);
+        base.OnEventCast(caster, spell);
+    }
+}
+class ExaltedWing(BossModule module) : InstantRaidwide(module, AID.ExaltedWing);
+class ExaltedPlumes(BossModule module) : InstantRaidwide(module, AID.ExaltedPlumes);
+class GuiltyVerdict(BossModule module) : InstantRaidwide(module, AID.GuiltyVerdict);
+class FlamingSwordRaidwide(BossModule module) : InstantRaidwide(module, AID.FlamingSword);
 
 class T02InnocenceStates : StateMachineBuilder
 {
@@ -127,6 +159,9 @@ class T02InnocenceStates : StateMachineBuilder
             .ActivateOnEnter<DaybreakAOE>()
             .ActivateOnEnter<ScoldsBridle>()
             .ActivateOnEnter<HolySword>()
+            .ActivateOnEnter<SinSphere>()
+            .ActivateOnEnter<ExaltedWing>()
+            .ActivateOnEnter<ExaltedPlumes>()
             .ActivateOnEnter<InnocenceAdds>();
     }
 
@@ -134,8 +169,7 @@ class T02InnocenceStates : StateMachineBuilder
     {
         SimpleState(id, 10000, "Enrage")
             .ActivateOnEnter<RighteousBolt>()
-            .ActivateOnEnter<SoulAndBody1>()
-            .ActivateOnEnter<SoulAndBody2>()
+            .ActivateOnEnter<SoulAndBody>()
             .ActivateOnEnter<HolyTrinity>()
             .ActivateOnEnter<ReprobationLine>()
             .ActivateOnEnter<ReprobationLong>()
@@ -146,6 +180,10 @@ class T02InnocenceStates : StateMachineBuilder
             .ActivateOnEnter<Shadowreaver>()
             .ActivateOnEnter<Manacle>()
             .ActivateOnEnter<HolySwordAdd>()
+            .ActivateOnEnter<GuiltyVerdict>()
+            .ActivateOnEnter<FlamingSwordRaidwide>()
+            .ActivateOnEnter<DropOfLight>()
+            .ActivateOnEnter<LightPillar>()
             .ActivateOnEnter<InnocenceAdds>();
     }
 }

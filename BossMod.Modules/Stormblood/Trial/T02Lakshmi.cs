@@ -2,102 +2,133 @@ namespace BossMod.Stormblood.Trial.T02Lakshmi;
 
 public enum OID : uint
 {
-    Boss = 0x1E20, // R3.500, x1
-    Helper = 0x18D6, // R0.500, x16, 523 type : Looks like a helper instance pops up where voidzones are cast also.
-    Lakshmi2 = 0x1D27, // R1.000, x10
-    Lakshmi3 = 0x1E23, // R0.000, x1
-    DreamingKshatriya = 0x1E22, // R1.000, x2
-    Actor1e24 = 0x1E24, // R5.000, x1 (spawn during fight)
-    Vril = 0x1E21, // R1.000, x12 (spawn during fight)
-    VoidZone = 0x1EA76C // R0.5 voidzone aoes : Spawn during fight.
+    Boss = 0x1E20, // R3.500
+    Helper = 0x18D6, // R0.500
+    DreamingKshatriya = 0x1E22, // R1.000
+    Vril = 0x1E21, // R1.000
+    VoidZone = 0x1EA76C, // R0.500
 }
 
 public enum AID : uint
 {
     AutoAttack = 8535, // Boss->player, no cast, single-target
-    AetherDrain = 9357, // Vril->player, no cast, single-target
-    AlluringArm = 9352, // Boss->self, 7.0s cast, single-target
-    AlluringEmbrace1 = 9358, // Lakshmi3->self, no cast, range 0 circle
-    AlluringEmbrace2 = 9366, // Helper->self, no cast, range 100 circle
-
-    BlissfulArrow1 = 9353, // Helper->player, no cast, single-target
-    BlissfulArrow2 = 9354, // Helper->player, no cast, single-target
-
-    BlissfulSpear1 = 9355, // Helper->self, no cast, range 40 width 8 cross
-    BlissfulSpear2 = 9356, // Helper->self, no cast, range 40 width 8 cross
-    BlissfulSpear3 = 9364, // Helper->player, no cast, range 7 circle
-    BlissfulSpear4 = 9365, // Helper->player, no cast, range 7 circle
-
+    Stotram = 9347, // Boss->self, 3.0s cast, range 40 circle
     Chanchala = 9348, // Boss->self, 3.0s cast, single-target
     DivineDenial = 9349, // Boss->self, 8.0s cast, range 40 circle
     HandOfGrace = 9350, // Boss->self, 7.0s cast, single-target
     HandOfBeauty = 9351, // Boss->self, 7.0s cast, single-target
-    Jagadishwari = 9026, // Boss->self, no cast, single-target
-    Stotram1 = 9347, // Boss->self, 3.0s cast, range 40 circle
-    Stotram2 = 9374, // Boss->self, 3.0s cast, range 40 circle
-
-    ThePallOfLight1 = 9360, // Boss->player, 5.0s cast, range 7 circle
+    AlluringArm = 9352, // Boss->self, 7.0s cast, single-target
+    BlissfulSpearCross1 = 9355, // Helper->self, no cast, range 40 width 8 cross
+    BlissfulSpearCross2 = 9356, // Helper->self, no cast, range 40 width 8 cross
+    BlissfulSpearCircle1 = 9364, // Helper->player, no cast, range 7 circle
+    BlissfulSpearCircle2 = 9365, // Helper->player, no cast, range 7 circle
     ThePallOfLightStack = 9361, // Boss->players, 5.0s cast, range 7 circle
-
-    ThePullOfLightTB1 = 9362, // Boss->player, 5.0s cast, single-target
-    ThePullOfLightTB2 = 9363, // Boss->player, 5.0s cast, single-target
-
-    ThePathOfLightCleave = 9359, // Boss->self, no cast, range 40+R ?-degree cone
-    ThePathOfLightProtean = 9377, // Boss->self, no cast, range 40+R ?-degree cone
-
-    Unknown1 = 9305, // Lakshmi3->self, no cast, single-target
-    Unknown2 = 9306, // Helper->self, no cast, single-target
-
-    TailSlap = 9612, // Dreamer->self, no cast, range 6+R ?-degree cone
-    InnerDemons = 9613 // Dreamer->self, 4.0s cast, range 6+R circle
+    ThePullOfLight = 9362, // Boss->player, 5.0s cast, single-target
+    ThePullOfLightAlt = 9363, // Boss->player, 5.0s cast, single-target
+    ThePathOfLight = 9359, // Boss->self, no cast, range 40+R cone
+    ThePathOfLightProtean = 9377, // Boss->self, no cast, range 40+R cone
+    StotramChanchala = 9374, // Boss->self, 3.0s cast, range 40 circle
+    TailSlap = 9612, // DreamingKshatriya->self, no cast, range 6+R cone
+    InnerDemons = 9613, // DreamingKshatriya->self, 4.0s cast, range 6+R circle
 }
 
 public enum IconID : uint
 {
-    ProteanCleave = 14, // player : 45 degree cleave
-    Stackmarker = 62, // player
-    SpreadCross = 107, // player  : This baitaway is the cross shape
-    SpreadCircle = 109, // player : This baitaway is the circle shape
-    Tankbuster = 218, // player : 2
+    ProteanCleave = 14,
+    Stack = 62,
+    SpreadCross = 107,
+    SpreadCircle = 109,
+    Tankbuster = 218,
 }
 
 public enum SID : uint
 {
-    TargetRight = 1374,
-    TargetLeft = 1375,
-    Bleeding = 320,
-    Seduced = 1389,
-    Chanchala = 1410,
-    Weakness = 43,
-    Transcendent = 418,
-    Vril = 1290
+    Vril = 1290,
 }
 
-class DivineDenial(BossModule module) : Components.RaidwideCast(module, AID.DivineDenial);
-class Stotram1(BossModule module) : Components.RaidwideCast(module, AID.Stotram1);
-class Stotram2(BossModule module) : Components.RaidwideCast(module, AID.Stotram2);
-class ThePallOfLight1(BossModule module) : Components.StandardAOEs(module, AID.ThePallOfLight1, 7);
-class ThePallOfLightStack(BossModule module) : Components.StandardAOEs(module, AID.ThePallOfLightStack, 7);
-class ThePullOfLightTB1(BossModule module) : Components.SingleTargetCast(module, AID.ThePullOfLightTB1);
-class ThePullOfLightTB2(BossModule module) : Components.SingleTargetCast(module, AID.ThePullOfLightTB2);
+class DreamingKshatriyaAdds(BossModule module) : Components.Adds(module, (uint)OID.DreamingKshatriya);
+class TailSlap(BossModule module) : Components.StandardAOEs(module, AID.TailSlap, new AOEShapeCone(7, 60.Degrees()));
+class InnerDemons(BossModule module) : Components.CastGaze(module, AID.InnerDemons);
+class Stotram(BossModule module) : Components.RaidwideCast(module, AID.Stotram);
+class StotramChanchala(BossModule module) : Components.RaidwideCast(module, AID.StotramChanchala);
+class DivineDenial(BossModule module) : Components.KnockbackFromCastTarget(module, AID.DivineDenial, 6.5f);
+class ThePallOfLight(BossModule module) : Components.StackWithCastTargets(module, AID.ThePallOfLightStack, 7, 8, 8);
+class ThePullOfLightTB(BossModule module) : Components.SingleTargetCast(module, AID.ThePullOfLight);
+class ThePullOfLightTBAlt(BossModule module) : Components.SingleTargetCast(module, AID.ThePullOfLightAlt);
+class CircleZone(BossModule module) : Components.Voidzone(module, 10, OID.VoidZone);
 
-class InnerDemons(BossModule module) : Components.StandardAOEs(module, AID.InnerDemons, 6);
+class VrilOrbs(BossModule module) : BossComponent(module)
+{
+    public override void DrawArenaForeground(int pcSlot, Actor pc)
+    {
+        foreach (var z in Module.Enemies((uint)OID.Vril).Where(z => !z.IsDead))
+            Arena.AddCircle(z.Position, 0.75f, ArenaColor.Safe);
+    }
+}
+
+class PathOfLight(BossModule module) : Components.GenericBaitAway(module, AID.ThePathOfLight, damageType: AIHints.PredictedDamageType.Tankbuster)
+{
+    public override void OnEventIcon(Actor actor, uint iconID, ulong targetID)
+    {
+        if ((IconID)iconID != IconID.ProteanCleave)
+            return;
+        if (WorldState.Actors.Find(targetID) is { } target)
+            CurrentBaits.Add(new(Module.PrimaryActor, target, new AOEShapeCone(40, 37.5f.Degrees()), WorldState.FutureTime(4.7f)));
+    }
+
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID is AID.ThePathOfLightProtean or AID.ThePathOfLight)
+        {
+            ++NumCasts;
+            CurrentBaits.Clear();
+        }
+    }
+}
+
+class BlissfulBaits(BossModule module) : Components.GenericBaitAway(module)
+{
+    public override void OnEventIcon(Actor actor, uint iconID, ulong targetID)
+    {
+        if (WorldState.Actors.Find(targetID) is not { } target)
+            return;
+        var act = WorldState.FutureTime(4.7f);
+        if (iconID == (uint)IconID.SpreadCross)
+            CurrentBaits.Add(new(target, target, new AOEShapeCross(40, 4), act));
+        else if (iconID == (uint)IconID.SpreadCircle)
+            CurrentBaits.Add(new(target, target, new AOEShapeCircle(7), act));
+    }
+
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID is AID.BlissfulSpearCross1 or AID.BlissfulSpearCross2 or AID.BlissfulSpearCircle1 or AID.BlissfulSpearCircle2)
+        {
+            ++NumCasts;
+            CurrentBaits.Clear();
+        }
+    }
+}
 
 class T02LakshmiStates : StateMachineBuilder
 {
     public T02LakshmiStates(BossModule module) : base(module)
     {
         TrivialPhase()
+            .ActivateOnEnter<DreamingKshatriyaAdds>()
+            .ActivateOnEnter<TailSlap>()
+            .ActivateOnEnter<InnerDemons>()
             .ActivateOnEnter<DivineDenial>()
-            .ActivateOnEnter<Stotram1>()
-            .ActivateOnEnter<Stotram2>()
-            .ActivateOnEnter<ThePallOfLight1>()
-            .ActivateOnEnter<ThePallOfLightStack>()
-            .ActivateOnEnter<ThePullOfLightTB1>()
-            .ActivateOnEnter<ThePullOfLightTB2>()
-            .ActivateOnEnter<InnerDemons>();
+            .ActivateOnEnter<Stotram>()
+            .ActivateOnEnter<StotramChanchala>()
+            .ActivateOnEnter<ThePallOfLight>()
+            .ActivateOnEnter<ThePullOfLightTB>()
+            .ActivateOnEnter<ThePullOfLightTBAlt>()
+            .ActivateOnEnter<PathOfLight>()
+            .ActivateOnEnter<BlissfulBaits>()
+            .ActivateOnEnter<VrilOrbs>()
+            .ActivateOnEnter<CircleZone>();
     }
 }
 
 [ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 263, NameID = 6385)]
-public class T02Lakshmi(WorldState ws, Actor primary) : BossModule(ws, primary, primary.Position, new ArenaBoundsCircle(20));
+public class T02Lakshmi(WorldState ws, Actor primary) : BossModule(ws, primary, new(0, 0), new ArenaBoundsCircle(20));

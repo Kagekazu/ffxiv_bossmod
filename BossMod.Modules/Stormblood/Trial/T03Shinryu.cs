@@ -32,56 +32,37 @@ public enum AID : uint
     IcicleImpact = 8096, // Icicle->self, no cast, range 6 circle
     Spikesicle = 8097, // Icicle->self, 2.5s cast, range 62+R width 10 rect
     Hellfire = 8076, // Helper->self, 10.0s cast, range 60 circle
-    HellfireVisual = 8107, // Shinryu->self, 10.0s cast, single-target
-    _Ability_ = 8074, // Shinryu->self, no cast, single-target
+    HellfireVisual = 8107, // Boss->self, 10.0s cast, single-target
     MeteorImpact = 9291, // Helper->self, 5.0s cast, range 60 circle
-    MeteorImpact1 = 8086, // Cocoon1/MassiveCocoon->self, 4.0s cast, range 60 circle
-    _Ability_1 = 8514, // Cocoon1/MassiveCocoon->self, no cast, single-target
-    Attack1 = 870, // Hakkinryu/Ginryu->player, no cast, single-target
-    Collapse = 8728, // Hakkinryu->self, no cast, range 8+R ?-degree cone
-    Protostar = 8085, // Shinryu->self, 6.0s cast, range 80 circle
-    Protostar1 = 8123, // Helper->self, no cast, range 50 circle
-    DarkMatter = 8088, // Shinryu->self, 3.0s cast, range 60 circle
-    _Ability_2 = 8488, // Shinryu->self, no cast, single-target
-    GyreCharge = 8104, // Shinryu->self, no cast, range 100+R width 60 rect
+    MeteorImpactCocoon = 8086, // Cocoon1/MassiveCocoon->self, 4.0s cast, range 60 circle
+    Collapse = 8728, // Hakkinryu->self, no cast, range 8+R cone
+    Protostar = 8085, // Boss->self, 6.0s cast, range 80 circle
+    DarkMatter = 8088, // Boss->self, 3.0s cast, range 60 circle
+    GyreCharge = 8104, // Boss->self, no cast, range 100+R width 60 rect
     GyreChargeVisual = 8180, // Helper->self, 6.3s cast, range 100+R width 60 rect
-    _Ability_3 = 8081, // Shinryu->self, no cast, single-target
-    TailSlap1 = 8083, // Tail->self, 3.0s cast, range 40 width 20 rect
-    TailSlap2 = 9130, // Tail->self, 3.0s cast, range 40 width 20 rect
-
-    _Ability_4 = 8084, // Tail->self, no cast, single-target
-    _Ability_5 = 8142, // Shinryu->self, no cast, single-target
-    _Ability_6 = 8082, // Shinryu->self, no cast, single-target
+    TailSlap = 8083, // Tail->self, 3.0s cast, range 40 width 20 rect
+    TailSlapAlt = 9130, // Tail->self, 3.0s cast, range 40 width 20 rect
     IceStorm = 8098, // LeftWing->self, 6.0s cast, single-target
-    BurningChains = 8144, // Helper->self, no cast : Burning chains tether on two players. Run apart to break chains
+    BurningChains = 8144, // Helper->self, no cast
     IceStormRaidwide = 8099, // Helper->self, no cast, range 60 circle
-    _Ability_7 = 8143, // Shinryu->self, no cast, single-target
-    Dragonfist = 9455, // Shinryu->self, no cast, single-target
+    Dragonfist = 9455, // Boss->self, no cast, single-target
     DragonfistVisual = 9456, // Helper->self, 4.0s cast, range 16 circle
     DiamondDust = 8078, // Helper->self, 10.0s cast, range 60 circle
-    DiamondDust1 = 8109, // Shinryu->self, 10.0s cast, single-target
     Fireball = 8732, // Ginryu->location, 2.5s cast, range 4 circle
     DeathSentence = 8731, // Hakkinryu->player, 4.0s cast, single-target
     SpikedTail = 8729, // Ginryu->player, 1.0s cast, single-target
-
     JudgmentBolt = 8077, // Helper->self, 10.0s cast, range 60 circle
-    JudgmentBolt1 = 8108, // Shinryu->self, 10.0s cast, single-target
-
     EarthenFury = 8079, // Helper->self, 10.0s cast, range 60 circle
-    EarthenFuryCast = 8110, // Shinryu->self, 10.0s cast, single-target
-    EarthenFurySmash = 9146, // 18D6->location, Range 20, width 20 rectangle : cracks or destroys one square.
+    EarthenFurySmash = 9146, // Helper->location, range 20 width 20 rect
     AkhRhai = 8102, // Helper->location, no cast, range 4 circle
-    AkhRhai1 = 8103, // Helper->location, no cast, range 4 circle
+    AkhRhaiRepeat = 8103, // Helper->location, no cast, range 4 circle
     HypernovaCast = 8089, // RightWing->self, 6.0s cast, single-target
-    Hypernova = 8090, // Helper->players, no cast, range 8 circle stack
-
-    SuperCycloneKB = 8984, // Helper->self, 0.5s cast, range 90 circle : distance 5 knockback
-    AerialBlastKB = 8080, // Helper->self, 10.0s cast, range 60 circle : distance 15 knockback
-    AerialBlast1 = 8111, // Shinryu->self, 10.0s cast, single-target
+    Hypernova = 8090, // Helper->players, no cast, range 8 circle
+    SuperCyclone = 8984, // Helper->self, 0.5s cast, range 90 circle
+    AerialBlast = 8080, // Helper->self, 10.0s cast, range 60 circle
     BlazingTrail = 8730, // Ginryu->self, 3.0s cast, range 15+R width 11 rect
-
-    EarthBreath = 8093, // Shinryu->self, 9.0s cast, range 6+R ?-degree cone
-    EarthBreath1 = 8094, // Helper->self, 4.5s cast, range 80+R 60.000-degree cone
+    EarthBreath = 8093, // Boss->self, 9.0s cast, range 6+R cone
+    EarthBreathAOE = 8094, // Helper->self, 4.5s cast, range 80+R 60-degree cone
 }
 
 public enum IconID : uint
@@ -109,56 +90,172 @@ public enum TetherID : uint
     BurningTether = 9
 }
 
-class AkhMornVisual(BossModule module) : Components.StackWithCastTargets(module, AID.AkhMornVisual, 6);
-class Hellfire(BossModule module) : Components.RaidwideCast(module, AID.Hellfire);
-class MeteorImpact(BossModule module) : Components.RaidwideCast(module, AID.MeteorImpact);
-class MeteorImpact1(BossModule module) : Components.RaidwideCast(module, AID.MeteorImpact1);
-class Protostar(BossModule module) : Components.RaidwideCast(module, AID.Protostar);
-class DarkMatter(BossModule module) : Components.RaidwideCast(module, AID.DarkMatter);
-class TailSlap1(BossModule module) : Components.StandardAOEs(module, AID.TailSlap1, new AOEShapeRect(40, 10));
-class TailSlap2(BossModule module) : Components.StandardAOEs(module, AID.TailSlap2, new AOEShapeRect(40, 10));
-class Spikesicle(BossModule module) : Components.StandardAOEs(module, AID.Spikesicle, new AOEShapeRect(64.5f, 5));
-class BlazingTrail(BossModule module) : Components.StandardAOEs(module, AID.BlazingTrail, new AOEShapeRect(16.8f, 5.5f));
-class EarthBreath1(BossModule module) : Components.StandardAOEs(module, AID.EarthBreath1, new AOEShapeCone(80, 30.Degrees()));
-class IceStormRaidwide(BossModule module) : Components.RaidwideCast(module, AID.IceStormRaidwide);
-class DragonfistVisual(BossModule module) : Components.StandardAOEs(module, AID.DragonfistVisual, 16);
-class DiamondDust(BossModule module) : Components.RaidwideCast(module, AID.DiamondDust);
+class TidalWave(BossModule module) : Components.KnockbackFromCastTarget(module, AID.TidalWave, 35, kind: Components.Knockback.Kind.DirForward);
+class Levinbolt(BossModule module) : Components.SpreadFromIcon(module, (uint)IconID.LevinMarker, AID.Levinbolt, 5, 6);
+class EarthBreathBait(BossModule module) : Components.BaitAwayIcon(module, new AOEShapeCone(60, 30.Degrees()), (uint)IconID.EarthBreathIcon, AID.EarthBreathAOE);
+class EarthBreathAOE(BossModule module) : Components.StandardAOEs(module, AID.EarthBreathAOE, new AOEShapeCone(60, 30.Degrees()));
+class IcicleAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.Icicle]);
+class AkhMornStack(BossModule module) : Components.CastSharedTankbuster(module, AID.AkhMornVisual, 5);
+class BurningChains(BossModule module) : Components.Chains(module, (uint)TetherID.BurningTether, AID.BurningChains, 30);
+class MeteorImpact(BossModule module) : Components.ProximityAOEs(module, AID.MeteorImpact, 14);
+class Cocoons(BossModule module) : Components.AddsMulti(module, [(uint)OID.Cocoon1, (uint)OID.MassiveCocoon]);
+class DragonAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.Ginryu, (uint)OID.Hakkinryu], priority: 1);
 class Fireball(BossModule module) : Components.StandardAOEs(module, AID.Fireball, 4);
+class BlazingTrail(BossModule module) : Components.StandardAOEs(module, AID.BlazingTrail, new AOEShapeRect(16.8f, 5.5f));
+class GyreCharge(BossModule module) : Components.StandardAOEs(module, AID.GyreChargeVisual, new AOEShapeRect(100, 30));
+class TailSlap(BossModule module) : Components.GroupedAOEs(module, [AID.TailSlap, AID.TailSlapAlt], new AOEShapeRect(40, 10));
+class Dragonfist(BossModule module) : Components.StandardAOEs(module, AID.DragonfistVisual, 16);
+class EarthenFurySmash(BossModule module) : Components.StandardAOEs(module, AID.EarthenFurySmash, new AOEShapeRect(20, 10));
+class SuperCyclone(BossModule module) : Components.KnockbackFromCastTarget(module, AID.SuperCyclone, 5);
+class AerialBlast(BossModule module) : Components.KnockbackFromCastTarget(module, AID.AerialBlast, 15);
+class Hypernova(BossModule module) : Components.StackWithIcon(module, (uint)IconID.HyperNovaStackIcon, AID.Hypernova, 7, 6);
+class Spikesicle(BossModule module) : Components.StandardAOEs(module, AID.Spikesicle, new AOEShapeRect(64.5f, 5), maxCasts: 3);
+class SpikesicleKnockback(BossModule module) : Components.KnockbackFromCastTarget(module, AID.Spikesicle, 10, maxCasts: 3, shape: new AOEShapeRect(64.5f, 5), kind: Components.Knockback.Kind.DirForward);
 class DeathSentence(BossModule module) : Components.SingleTargetCast(module, AID.DeathSentence);
 class SpikedTail(BossModule module) : Components.SingleTargetCast(module, AID.SpikedTail);
+class Hellfire(BossModule module) : Components.RaidwideCast(module, AID.Hellfire);
+class DiamondDust(BossModule module) : Components.RaidwideCast(module, AID.DiamondDust);
 class JudgmentBolt(BossModule module) : Components.RaidwideCast(module, AID.JudgmentBolt);
+class IceStormRaidwide(BossModule module) : Components.RaidwideInstant(module, AID.IceStormRaidwide, 0);
+class Protostar(BossModule module) : Components.RaidwideCast(module, AID.Protostar);
+class DarkMatter(BossModule module) : Components.RaidwideCast(module, AID.DarkMatter);
 class EarthenFury(BossModule module) : Components.RaidwideCast(module, AID.EarthenFury);
-class SuperCycloneKB(BossModule module) : Components.KnockbackFromCastTarget(module, AID.SuperCycloneKB, 5);
-class AerialBlastKB(BossModule module) : Components.KnockbackFromCastTarget(module, AID.AerialBlastKB, 15);
+class MeteorImpactCocoon(BossModule module) : Components.RaidwideCast(module, AID.MeteorImpactCocoon);
+class AkhRhai(BossModule module) : Components.GenericAOEs(module)
+{
+    private static readonly AOEShapeCircle _shape = new(4);
+    private readonly List<AOEInstance> _aoes = [];
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID is not (AID.AkhRhai or AID.AkhRhaiRepeat))
+            return;
+        var pos = spell.TargetXZ;
+        if (pos == default)
+            pos = caster.Position;
+        _aoes.Add(new(_shape, pos, default, WorldState.FutureTime(6)));
+        ++NumCasts;
+    }
+
+    public override void Update() => _aoes.RemoveAll(a => a.Activation < WorldState.CurrentTime);
+}
+
+class WaterPuddles(BossModule module) : BossComponent(module)
+{
+    private bool _levinCasting;
+    private bool _fireCasting;
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.LevinboltVisual)
+            _levinCasting = true;
+        else if ((AID)spell.Action.ID == AID.HellfireVisual)
+            _fireCasting = true;
+    }
+
+    public override void OnCastFinished(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.LevinboltVisual)
+            _levinCasting = false;
+        else if ((AID)spell.Action.ID == AID.HellfireVisual)
+            _fireCasting = false;
+    }
+
+    public override void AddGlobalHints(GlobalHints hints)
+    {
+        if (!Module.Enemies((uint)OID.WaterPuddles).Any(z => !z.IsDead))
+            return;
+        if (_levinCasting)
+            hints.Add("Avoid puddles during lightning bolts.");
+        else if (_fireCasting)
+            hints.Add("Stand in puddles during hellfire.");
+    }
+
+    public override void DrawArenaForeground(int pcSlot, Actor pc)
+    {
+        foreach (var orb in Module.Enemies((uint)OID.WaterPuddles))
+        {
+            if (orb.IsDead)
+                continue;
+            if (_levinCasting)
+                Arena.ZoneCircle(orb.Position, 5, ArenaColor.Danger);
+            else if (_fireCasting)
+                Arena.ZoneCircle(orb.Position, 5, ArenaColor.SafeFromAOE);
+            else
+                Arena.AddCircle(orb.Position, 5, ArenaColor.Object);
+        }
+    }
+}
+
+class Fetters(BossModule module) : BossComponent(module)
+{
+    public override void OnStatusLose(Actor actor, in ActorStatus status)
+    {
+        if (status.ID == (uint)SID.Fetters && Raid.FindSlot(actor.InstanceID) >= 0)
+            Arena.Bounds = new ArenaBoundsSquare(30);
+    }
+}
+
+class TailSlapArena(BossModule module) : BossComponent(module)
+{
+    private static readonly ArenaBoundsSquare Phase3Base = new(30);
+    private PolygonClipper.Operand _arena = new([.. CurveApprox.Rect(new WDir(0, 1), 30, 30)]);
+
+    public override void OnActorEAnim(Actor actor, uint state)
+    {
+        if (state != 0x00400080u || actor.OID != (uint)OID.Platform || actor.Position.AlmostEqual(default, 1f))
+            return;
+        var offset = actor.Position.Rounded() - Arena.Center;
+        var tile = new PolygonClipper.Operand([.. CurveApprox.Rect(new WDir(0, 1), 10, 10).Select(c => c + offset)]);
+        _arena = new(Phase3Base.Clipper.Difference(_arena, tile));
+        Arena.Bounds = new ArenaBoundsCustom(30, Phase3Base.Clipper.Simplify(_arena));
+    }
+}
 
 class T03ShinryuStates : StateMachineBuilder
 {
     public T03ShinryuStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<AkhMornVisual>()
-            .ActivateOnEnter<Hellfire>()
+            .ActivateOnEnter<TidalWave>()
+            .ActivateOnEnter<WaterPuddles>()
+            .ActivateOnEnter<Levinbolt>()
+            .ActivateOnEnter<EarthBreathBait>()
+            .ActivateOnEnter<EarthBreathAOE>()
+            .ActivateOnEnter<AkhMornStack>()
+            .ActivateOnEnter<IcicleAdds>()
+            .ActivateOnEnter<Spikesicle>()
+            .ActivateOnEnter<SpikesicleKnockback>()
+            .ActivateOnEnter<AkhRhai>()
+            .ActivateOnEnter<BurningChains>()
+            .ActivateOnEnter<Cocoons>()
+            .ActivateOnEnter<DragonAdds>()
             .ActivateOnEnter<MeteorImpact>()
-            .ActivateOnEnter<MeteorImpact1>()
+            .ActivateOnEnter<MeteorImpactCocoon>()
+            .ActivateOnEnter<Fireball>()
+            .ActivateOnEnter<BlazingTrail>()
+            .ActivateOnEnter<Fetters>()
+            .ActivateOnEnter<Hellfire>()
+            .ActivateOnEnter<IceStormRaidwide>()
             .ActivateOnEnter<Protostar>()
             .ActivateOnEnter<DarkMatter>()
-            .ActivateOnEnter<TailSlap1>()
-            .ActivateOnEnter<TailSlap2>()
-            .ActivateOnEnter<Spikesicle>()
-            .ActivateOnEnter<BlazingTrail>()
-            .ActivateOnEnter<EarthBreath1>()
-            .ActivateOnEnter<IceStormRaidwide>()
-            .ActivateOnEnter<DragonfistVisual>()
-            .ActivateOnEnter<DiamondDust>()
-            .ActivateOnEnter<Fireball>()
-            .ActivateOnEnter<DeathSentence>()
-            .ActivateOnEnter<SpikedTail>()
             .ActivateOnEnter<JudgmentBolt>()
             .ActivateOnEnter<EarthenFury>()
-            .ActivateOnEnter<SuperCycloneKB>()
-            .ActivateOnEnter<AerialBlastKB>();
+            .ActivateOnEnter<DeathSentence>()
+            .ActivateOnEnter<SpikedTail>()
+            .ActivateOnEnter<GyreCharge>()
+            .ActivateOnEnter<TailSlap>()
+            .ActivateOnEnter<TailSlapArena>()
+            .ActivateOnEnter<Dragonfist>()
+            .ActivateOnEnter<DiamondDust>()
+            .ActivateOnEnter<EarthenFurySmash>()
+            .ActivateOnEnter<SuperCyclone>()
+            .ActivateOnEnter<AerialBlast>()
+            .ActivateOnEnter<Hypernova>();
     }
 }
 
 [ModuleInfo(Contributors = "Kagekazu", Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 239, NameID = 5640)]
-public class T03Shinryu(WorldState ws, Actor primary) : BossModule(ws, primary, primary.Position, new ArenaBoundsCircle(20));
+public class T03Shinryu(WorldState ws, Actor primary) : BossModule(ws, primary, new(0, 0), new ArenaBoundsSquare(20, MapResolution: 0.3f));
