@@ -1,4 +1,5 @@
-﻿namespace BossMod.Global.Crucible.ElderTablitaurPiece;
+﻿#pragma warning disable CA1707 // Identifiers should not contain underscores
+namespace BossMod.Global.Crucible.ElderTablitaurPiece;
 
 public enum OID : uint
 {
@@ -86,6 +87,15 @@ class Shockwave(BossModule module) : Components.Knockback(module)
         foreach (var c in Casters.Take(2))
             yield return new Source(c.CastInfo!.LocXZ, 20, Module.CastFinishAt(c.CastInfo));
     }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        foreach (var s in Sources(slot, actor).Where(s => !IsImmune(slot, s.Activation)).Take(1))
+        {
+            var tc = s.Origin + (Arena.Center - s.Origin).Normalized() * 6;
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(tc, 1), s.Activation);
+        }
+    }
 }
 
 class RallyingCheer(BossModule module) : Components.CastInterruptHint(module, AID._Ability_RallyingCheer);
@@ -106,7 +116,7 @@ class EndlessSwing(BossModule module) : Components.Voidzone(module, 8, 0, a => a
 
 class EndlessSwipes(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    Angle _rotation = default;
+    Angle _rotation;
     Actor? _caster;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
