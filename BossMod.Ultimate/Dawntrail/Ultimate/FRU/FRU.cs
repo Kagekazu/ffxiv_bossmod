@@ -1,8 +1,54 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2QuadrupleSlap(BossModule module) : Components.TankSwap(module, AID.QuadrupleSlapFirst, AID.QuadrupleSlapFirst, AID.QuadrupleSlapSecond, 4.1f, null, true);
 class P3Junction(BossModule module) : Components.CastCounter(module, AID.Junction);
-class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, AID.BlackHalo, new AOEShapeCone(60, 45.Degrees())); // TODO: verify angle
+class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, AID.BlackHalo, new AOEShapeCone(60, 45.Degrees())) // TODO: verify angle
+{
+    private WDir _away;
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        base.OnCastStarted(caster, spell);
+        if (spell.Action == WatchedAction && Source != null)
+            _away = AwayFromParty(Source.Position);
+    }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        if (Source == null || Target == null || _away == default)
+        {
+            base.AddAIHints(slot, actor, assignment, hints);
+            return;
+        }
+
+        // both tanks take the cone out, opposite the party, from the start of the cast
+        var dest = Source.Position + 14 * _away;
+        if (actor.Role == Role.Tank)
+        {
+            if (actor == Target)
+                hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.5f));
+            else
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 2));
+            return;
+        }
+
+        // party leaves the final aim now, and also the cone as it currently points
+        hints.AddForbiddenZone(Shape.Distance(Source.Position, Angle.FromDirection(_away)));
+        hints.AddForbiddenZone(Shape.Distance(Source.Position, Angle.FromDirection(Target.Position - Source.Position)));
+    }
+
+    private WDir AwayFromParty(WPos origin)
+    {
+        WDir sum = default;
+        foreach (var p in Raid.WithoutSlot().Where(p => p.Role != Role.Tank))
+        {
+            var off = p.Position - origin;
+            if (off.LengthSq() > 4)
+                sum += off.Normalized();
+        }
+        return sum.LengthSq() > 0.25f ? -sum.Normalized() : new WDir(0, -1);
+    }
+}
 class P4HallowedWingsL(BossModule module) : Components.StandardAOEs(module, AID.HallowedWingsL, new AOEShapeRect(80, 20));
 class P4HallowedWingsR(BossModule module) : Components.StandardAOEs(module, AID.HallowedWingsR, new AOEShapeRect(80, 20));
 class P5ParadiseLost(BossModule module) : Components.CastCounter(module, AID.ParadiseLostP5AOE);

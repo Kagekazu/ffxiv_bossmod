@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P3UltimateRelativity(BossModule module) : Components.CastCounter(module, default)
 {
@@ -41,7 +41,6 @@ class P3UltimateRelativity(BossModule module) : Components.CastCounter(module, d
         hints.Add(hint, false);
     }
 
-    // drop PathfindMeleeGreed when dest is off boss maxmelee (fire out / lasers / hourglass)
     public bool RequiresStrictPosition(int slot, Actor actor)
     {
         if (States[slot].AssignedDir == default)
@@ -67,7 +66,6 @@ class P3UltimateRelativity(BossModule module) : Components.CastCounter(module, d
                     else
                     {
                         // ok, out is imminent, gtfo - we need to avoid clipping people, avoid dark blizzard (if it's being resolved now), and avoid lasers (if any)
-                        // (PathfindMeleeGreed is suppressed here so avoid zones actually pull off maxmelee)
                         var avoidBlizzard = NumCasts == 2;
                         foreach (var (i, p) in Raid.WithSlot().Exclude(slot))
                         {

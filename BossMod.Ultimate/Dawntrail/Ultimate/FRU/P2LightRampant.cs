@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2LightRampant(BossModule module) : BossComponent(module)
 {
@@ -272,7 +272,7 @@ class P2LightRampantAIPrepos(BossModule module) : BossComponent(module)
         if (towers != null && towers.Towers.Any(t => !t.ForbiddenSoakers[slot]))
             return; // assigned tower is handled by P2LightRampantAITowers
 
-        // 4 spots on a 90° arc (west to east); activation is now so melee greed cannot stay on the boss
+        // 4 spots on a 90° arc, west to east
         var south = prio >= 4;
         var indexInCamp = prio & 3; // 0 = west
         var dir = south ? (-45 + indexInCamp * 30).Degrees() : (225 - indexInCamp * 30).Degrees();
@@ -308,15 +308,18 @@ class P2LightRampantAITowers(BossModule module) : BossComponent(module)
                 var north = FirstBaitNorth(assignment, actor, partner);
                 var preposSpot = Module.Center + new WDir(0, north ? -BaitOffset : BaitOffset);
                 hints.AddForbiddenZone(ShapeDistance.InvertedCircle(preposSpot, 1), WorldState.CurrentTime);
+                hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center, 6), WorldState.FutureTime(1));
             }
             else
             {
-                // each next bait is just previous position rotated CW by 45 degrees
-                // note that this is only really relevant for second and third puddles - after that towers resolve and we use different component
-                //var nextSpot = Module.Center + BaitOffset * _puddles.PrevBaitOffset[slot].Normalized().Rotate(-45.Degrees());
-                //hints.AddForbiddenZone(ShapeDistance.InvertedCircle(nextSpot, 3));
-                var shape = ShapeDistance.DonutSector(Module.Center, BaitOffset - 1, BaitOffset + 2, Angle.FromDirection(_puddles.PrevBaitOffset[slot]) - 45.Degrees(), 30.Degrees());
+                // each next bait is the previous spot rotated CW by 45 degrees, walked on the rim
+                // cutting through the middle is shorter, and that is the path that clips the puddle
+                var prevOff = _puddles.PrevBaitOffset[slot];
+                var next = Angle.FromDirection(prevOff) - 45.Degrees();
+                var shape = ShapeDistance.DonutSector(Module.Center, BaitOffset - 1, BaitOffset + 2, next, 20.Degrees());
                 hints.AddForbiddenZone(p => -shape(p), DateTime.MaxValue);
+                hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center + prevOff, 6), WorldState.FutureTime(1));
+                hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center, 6), WorldState.FutureTime(1));
             }
         }
         else

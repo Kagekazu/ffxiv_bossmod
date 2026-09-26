@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 // tethers & general assignments
 class P4DarklitDragonsong(BossModule module) : BossComponent(module)
@@ -336,7 +336,6 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
 
         var isBaiter = assignment == (_config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT);
         var origin = _source.Position;
-        // no activation time: melee greed would otherwise stay on the boss until the tank is already farthest/closest
         if (NumCasts == 0)
         {
             if (isBaiter)

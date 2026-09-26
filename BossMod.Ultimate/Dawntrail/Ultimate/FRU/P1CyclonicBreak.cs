@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P1CyclonicBreakSpreadStack(BossModule module) : Components.UniformStackSpread(module, 6, 6, 2, 2, true)
 {
@@ -102,9 +102,8 @@ class P1CyclonicBreakAIBait(BossModule module) : BossComponent(module)
             return; // no assignment
         var origin = Module.PrimaryActor.Position;
         var dir = (180 - 45 * clockspot).Degrees().ToDirection();
-        // pin immediately so Pathfind actually walks during the cast (activation is protean 2, ~9s out)
         var dist = _spreadStack.Spreads.Count > 0
-            ? (FRU.StandsRanged(assignment, actor) ? 14f : 9f) // 6y spreads: melee inner, ranged outer
+            ? (FRU.StandsRanged(assignment, actor) ? 14f : 8f) // 6y spreads: melee at max melee, ranged outer
             : 7f; // pairs: same ring so adjacent support/DD clocks are in stack range
         hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin + dist * dir, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
     }
@@ -133,7 +132,7 @@ class P1CyclonicBreakAIDodgeSpreadStack(BossModule module) : BossComponent(modul
         var safeAngles = _forbiddenDirections.NextAllowed(assignedDirection, dodgeCCW);
         var (rangeMin, rangeMax) = _spreadStack.Stacks.Count > 0
             ? (4f, 10f)
-            : FRU.StandsRanged(assignment, actor) ? (13f, 18f) : (8f, 11f);
+            : FRU.StandsRanged(assignment, actor) ? (13f, 18f) : (6f, 8f);
         var safeZone = ShapeDistance.DonutSector(_forbiddenDirections.Center, rangeMin, rangeMax, (safeAngles.min + safeAngles.max) * 0.5f, (safeAngles.max - safeAngles.min) * 0.5f);
         hints.AddForbiddenZone(p => -safeZone(p), _spreadStack.Activation);
 

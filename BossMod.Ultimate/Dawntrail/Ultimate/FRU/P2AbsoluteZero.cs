@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2AbsoluteZero(BossModule module) : Components.CastCounter(module, AID.AbsoluteZeroAOE);
 
@@ -103,7 +103,6 @@ class P2Intermission(BossModule module) : Components.GenericBaitAway(module)
             var assignedCrystal = CrystalsOfLight.FirstOrDefault(c => c.Position.AlmostEqual(assignedPosition, 2));
             if (assignedCrystal != null)
             {
-                // MaxValue: FutureTime(60) was too soft vs PathfindMeleeGreed holding ice-veil maxmelee mid/W
                 hints.AddForbiddenZone(ShapeDistance.InvertedCircle(assignedPosition, 5), DateTime.MaxValue);
                 hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center, 17), DateTime.MaxValue); // prefer to stay near border, unless everything else is covered with aoes
             }
@@ -129,7 +128,6 @@ class P2Intermission(BossModule module) : Components.GenericBaitAway(module)
         }
     }
 
-    // crystal / cone bait spots are off maxmelee of ice veil; greed otherwise camps mid
     public bool RequiresStrictPosition(PartyRolesConfig.Assignment assignment)
     {
         if (!CrystalsActive)
