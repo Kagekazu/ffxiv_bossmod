@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P1ExplosionBurntStrikeFire(BossModule module) : Components.StandardAOEs(module, AID.ExplosionBurntStrikeFire, new AOEShapeRect(80, 5));
 class P1ExplosionBurntStrikeLightning(BossModule module) : Components.StandardAOEs(module, AID.ExplosionBurntStrikeLightning, new AOEShapeRect(80, 5));
@@ -13,7 +13,6 @@ class P1Explosion(BossModule module) : Components.GenericTowers(module)
     private bool _isWideLine;
     private bool _lineDone;
 
-    // PathfindMeleeGreed will otherwise hold maxmelee until the last second, then sprint into the tower
     public bool RequiresStrictPosition(int slot, PartyRolesConfig.Assignment assignment)
     {
         var role = _config.P1ExplosionsAssignment[assignment];

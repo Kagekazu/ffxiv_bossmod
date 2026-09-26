@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P3Apocalypse(BossModule module) : Components.GenericAOEs(module)
 {
@@ -445,17 +445,16 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
             midDir += 180.Degrees();
 
         var distance = 4.5f;
-        if (_apoc.NumCasts >= 28 && assignment == (_config.P3DarkestDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT))
+        if (_apoc.NumCasts >= 22 && assignment == (_config.P3DarkestDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT))
         {
-            // bait darkest dance (but make sure to share water first!)
-            distance = _water.Stacks.Count == 0 ? 19 : 8;
+            // step to the outer edge of the water stack, then out to bait; waiting until the stack resolves is too late to be furthest
+            distance = _water.Stacks.Count == 0 ? 19 : 10;
         }
 
         var destOff = distance * (midDir - _apoc.Rotation).ToDirection();
         var dest = Module.Center + destOff;
         if (distance >= 19)
         {
-            // same as P4 Somber Dance: MaxValue + greed stays on the boss instead of becoming farthest
             hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
             hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
         }

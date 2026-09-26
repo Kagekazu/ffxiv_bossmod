@@ -1,4 +1,4 @@
-﻿namespace BossMod.Dawntrail.Ultimate.FRU;
+namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
 {
@@ -16,7 +16,6 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
 
-    // PathfindMeleeGreed otherwise stays on boss instead of walking to -11·blue / +19·blue
     public bool RequiresStrictPosition(int slot) => _aoe == null && _blueMirror != default;
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
@@ -34,7 +33,7 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
         }
         else
         {
-            // melee prepos opposite blue (near boss); ranged far on blue side — was draw-only, so greed never left maxmelee
+            // melee opposite blue, ranged on the blue side
             var distance = _rangedSpots[slot] ? 19 : -11;
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + distance * _blueMirror, 1), DateTime.MaxValue);
         }
@@ -86,6 +85,12 @@ class P2MirrorMirrorHouseOfLight(BossModule module) : Components.GenericBaitAway
     private Angle? _blueMirror;
 
     private List<Source> CurrentSources => NumCasts == 0 ? FirstSources : SecondSources;
+
+    public bool RequiresStrictPosition(PartyRolesConfig.Assignment assignment)
+    {
+        var group = (NumCasts == 0 ? _config.P2MirrorMirror1SpreadSpots : _config.P2MirrorMirror2SpreadSpots)[assignment];
+        return CurrentSources.Count >= 2 && _blueMirror != null && group >= 0;
+    }
 
     private static readonly AOEShapeCone _shape = new(60, 15.Degrees());
 

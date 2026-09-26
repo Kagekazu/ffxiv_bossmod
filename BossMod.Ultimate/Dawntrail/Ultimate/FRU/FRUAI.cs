@@ -1,4 +1,4 @@
-﻿using BossMod.AI;
+using BossMod.AI;
 using BossMod.Autorotation;
 using BossMod.Pathfinding;
 
@@ -34,31 +34,29 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
             return;
         }
 
-        // same as Automatic movement: on thin ice a 1y nudge becomes a 32y slide, so only "stay" or "full slide" are legal
+        // on thin ice the only legal moves are "stand" or the component's 32y slide
         var thinIce = Player.FindStatus(SID.ThinIce);
-        if (thinIce != null)
-        {
-            var distance = thinIce.Value.Extra * 0.1f;
-            Hints.AddForbiddenZone(ShapeDistance.Donut(Player.Position, 1, distance - 1), World.FutureTime(2));
-        }
 
         if (Bossmods.ActiveModule is FRU module && module.Raid.TryFindSlot(Player.InstanceID, out var playerSlot))
         {
-            SetForcedMovement(CalculateDestination(module, primaryTarget, strategy.Option(Track.Movement), Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId]), thinIce != null ? 1.5f : 0.1f);
+            var option = strategy.Option(Track.Movement);
+            var dest = CalculateDestination(module, primaryTarget, option, Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId]);
+            if (thinIce != null)
+                dest = module.FindComponent<P2TwinStillnessSilence>()?.SlideTarget(playerSlot, Player) ?? Player.Position;
+            SetForcedMovement(dest, 0.1f);
         }
     }
 
     private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
         var strat = strategy.As<MovementStrategy>();
-        // plan default is PathfindMeleeGreed; Prepull is only a short window near 0. don't walk onto the boss during countdown
         if (!Player.InCombat && strat is MovementStrategy.Pathfind or MovementStrategy.PathfindMeleeGreed)
             strat = MovementStrategy.Prepull;
 
         return strat switch
         {
-            MovementStrategy.Pathfind => PathfindPosition(null, assignment, primaryTarget),
-            MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment, primaryTarget),
+            MovementStrategy.Pathfind => PathfindPosition(null, assignment),
+            MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment),
             MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
             MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
             MovementStrategy.Prepull => PrepullPosition(module, assignment),
@@ -67,7 +65,6 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         };
     }
 
-    // same idea as ThinIce: when the plan wants a spot off maxmelee, don't snap back to the boss
     private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
     {
         if (Player.FindStatus(SID.ThinIce) != null)
@@ -79,7 +76,13 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
             return true;
         if (module.FindComponent<P2MirrorMirrorReflectedScytheKickBlue>() is { } blue && blue.RequiresStrictPosition(slot))
             return true;
+        if (module.FindComponent<P2MirrorMirrorHouseOfLight>() is { } light && light.RequiresStrictPosition(assignment))
+            return true;
         if (module.FindComponent<P2MirrorMirrorBanish>() is { } banish && banish.RequiresStrictPosition(slot, assignment))
+            return true;
+        if (module.FindComponent<P2SinboundHoly>() != null)
+            return true;
+        if (module.FindComponent<P3BlackHalo>() is { Active: true })
             return true;
         if (module.FindComponent<P2Intermission>() is { } intermission && intermission.RequiresStrictPosition(assignment))
             return true;
@@ -89,43 +92,35 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
     }
 
     // TODO: account for leeway for casters
-    private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment, Actor? primaryTarget)
+    private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
     {
         var navi = NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed());
         var dest = navi.Destination ?? Player.Position;
-        var rangeRef = maxRangeTarget ?? (FRU.StandsRanged(assignment, Player) ? primaryTarget : null);
-        if (rangeRef == null)
+        if (maxRangeTarget == null)
             return dest;
 
         const float greedTolerance = 0.15f;
         var isRanged = FRU.StandsRanged(assignment, Player);
-        var maxRange = Player.HitboxRadius + rangeRef.HitboxRadius + (isRanged ? 25f : 3f) - greedTolerance;
-        var minRange = isRanged ? Player.HitboxRadius + rangeRef.HitboxRadius + 8f : 0f;
-        var toDest = dest - rangeRef.Position;
+        var maxRange = Player.HitboxRadius + maxRangeTarget.HitboxRadius + (isRanged ? 25f : 3f) - greedTolerance;
+        var toDest = dest - maxRangeTarget.Position;
         var range = toDest.Length();
-        var dir = range > 0.1f ? toDest / range : (Player.Position - rangeRef.Position);
+        if (range <= maxRange || navi.LeewaySeconds <= 0)
+            return dest;
+
+        var dir = range > 0.1f ? toDest / range : (Player.Position - maxRangeTarget.Position);
         if (dir.LengthSq() < 0.01f)
             dir = new WDir(0, -1);
         else
             dir = dir.Normalized();
 
-        WPos? snap = null;
-        if (maxRangeTarget != null && range > maxRange)
-            snap = rangeRef.Position + maxRange * dir;
-        else if (isRanged && range < minRange && (dest - Player.Position).LengthSq() < 4)
-            snap = rangeRef.Position + minRange * dir; // idle in melee: step out so we don't sit on tanks
-        if (snap == null)
-            return dest;
-        if (navi.LeewaySeconds <= 0)
-            return dest;
-
+        var snap = maxRangeTarget.Position + maxRange * dir;
         var map = NavigationContext.Map;
-        var snapGrid = map.WorldToGrid(snap.Value);
+        var snapGrid = map.WorldToGrid(snap);
         var snapG = map.InBounds(snapGrid.x, snapGrid.y) ? map.PixelMaxG.BoundSafeAt(map.GridToIndex(snapGrid)) : 0;
         var curG = map.PixelMaxG.BoundSafeAt(NavigationContext.ThetaStar.StartNodeIndex);
         if (snapG >= curG)
-            return snap.Value;
-        return Player.DistanceToHitbox(rangeRef) <= maxRange ? Player.Position : dest;
+            return snap;
+        return Player.DistanceToHitbox(maxRangeTarget) <= maxRange ? Player.Position : dest;
     }
 
     private WPos ExplicitMeleePosition(WPos ideal, Actor? target) => target != null ? ClosestInMelee(ideal, target) : ideal;

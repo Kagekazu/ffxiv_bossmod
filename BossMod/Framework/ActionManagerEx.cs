@@ -1,4 +1,4 @@
-﻿using BossMod.Services;
+using BossMod.Services;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -70,10 +70,11 @@ public sealed unsafe class ActionManagerEx : IAmex
     private readonly HookAddress<PublicContentBozja.Delegates.UseFromHolster> _useBozjaFromHolsterDirectorHook;
     private readonly HookAddress<InstanceContentDeepDungeon.Delegates.UsePomander> _usePomanderHook;
     private readonly HookAddress<InstanceContentDeepDungeon.Delegates.UseStone> _useStoneHook;
-    private readonly HookAddress<InstanceContentCrucible.Delegates.UseItem> _useCrucibleItemHook;
+    private readonly HookAddress<UseCrucibleItemDelegate> _useCrucibleItemHook;
     private readonly HookAddress<ActionEffectHandler.Delegates.Receive> _processPacketActionEffectHook;
     private readonly HookAddress<AutoAttackState.Delegates.SetImpl> _setAutoAttackStateHook;
 
+    private delegate void UseCrucibleItemDelegate(InstanceContentCrucible* self, uint slot, int unk);
     private delegate void ExecuteCommandGTDelegate(uint commandId, Vector3* position, uint param1, uint param2, uint param3, uint param4);
     private readonly ExecuteCommandGTDelegate _executeCommandGT;
     private DateTime _nextAllowedExecuteCommand;
@@ -99,7 +100,7 @@ public sealed unsafe class ActionManagerEx : IAmex
         _useBozjaFromHolsterDirectorHook = new(PublicContentBozja.Addresses.UseFromHolster, UseBozjaFromHolsterDirectorDetour);
         _usePomanderHook = new(InstanceContentDeepDungeon.Addresses.UsePomander, UsePomanderDetour);
         _useStoneHook = new(InstanceContentDeepDungeon.Addresses.UseStone, UseStoneDetour);
-        _useCrucibleItemHook = new(InstanceContentCrucible.Addresses.UseItem, UseCrucibleItemDetour);
+        _useCrucibleItemHook = new("E8 ?? ?? ?? ?? 83 7F 44 00 48 8D 57 44", UseCrucibleItemDetour);
         _processPacketActionEffectHook = new(ActionEffectHandler.Addresses.Receive, ProcessPacketActionEffectDetour);
         _setAutoAttackStateHook = new(AutoAttackState.Addresses.SetImpl, SetAutoAttackStateDetour);
 
@@ -684,7 +685,7 @@ public sealed unsafe class ActionManagerEx : IAmex
 
     private void UseCrucibleItemDetour(InstanceContentCrucible* self, uint slot, int unk)
     {
-        var id = CrucibleItemID.GetFromXBMRow(self->Inventory[(int)slot].ItemId);
+        var id = CrucibleItemID.FromSlot((&self->Inventory)[(int)slot].ItemId);
         var spellId = CrucibleItemID.GetSpellID(id);
         var action = new ActionID(ActionType.Crucible, (uint)id);
 
@@ -720,22 +721,23 @@ public sealed unsafe class ActionManagerEx : IAmex
         if (ic == null || ic->InstanceContentType != InstanceContentType.CrucibleOfTheUnbroken)
             return;
 
-        for (var i = 0; i < 10; i++)
+        var slots = &ic->Inventory;
+        for (var i = 0; i < InstanceContentCrucible.InventoryCount; i++)
         {
-            if (ic->Inventory[i].ItemId == xbmRow)
-            {
-                var prevRot = GetPlayerRotation();
-                var targetSystem = TargetSystem.Instance();
-                var prevTarget = targetSystem->Target;
-                // native function uses this item on the player's current hard target
-                targetSystem->Target = GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(targetId);
-                // TODO: figure out what arg3 is
-                _useCrucibleItemHook.Original(ic, (uint)i, 0);
-                targetSystem->Target = prevTarget;
-                _inst->AnimationLock = 1.1f;
-                HandleActionRequest(item, 0, targetId, default, prevRot, GetPlayerRotation());
-                return;
-            }
+            var slotId = slots[i].ItemId;
+            if (slotId != xbmRow && slotId != CrucibleItemID.GetSpellID(cid))
+                continue;
+
+            var prevRot = GetPlayerRotation();
+            var targetSystem = TargetSystem.Instance();
+            var prevTarget = targetSystem->Target;
+            // native function uses this item on the player's current hard target
+            targetSystem->Target = GameObjectManager.Instance()->Objects.GetObjectByGameObjectId(targetId);
+            _useCrucibleItemHook.Original(ic, (uint)i, 0);
+            targetSystem->Target = prevTarget;
+            _inst->AnimationLock = 1.1f;
+            HandleActionRequest(item, 0, targetId, default, prevRot, GetPlayerRotation());
+            return;
         }
     }
 

@@ -153,5 +153,17 @@ public static class CrucibleItemID
     public static uint GetSpellID(CrucibleID id) => SpellID[(int)id];
     public static uint GetXBMRow(CrucibleID id) => 75 + (uint)id;
 
-    public static CrucibleID GetFromXBMRow(uint rowId) => rowId > 75 ? (CrucibleID)(rowId - 75) : CrucibleID.None;
+    public static CrucibleID GetFromXBMRow(uint rowId) => rowId > 75 && rowId - 75 < (uint)CrucibleID.Count ? (CrucibleID)(rowId - 75) : CrucibleID.None;
+
+    // Slot ItemId is the XBM row in the director layout. Also accept the item id.
+    public static CrucibleID FromSlot(ushort id)
+    {
+        var fromRow = GetFromXBMRow(id);
+        if (fromRow != CrucibleID.None)
+            return fromRow;
+        for (var i = 1; i < SpellID.Length; ++i)
+            if (SpellID[i] == id)
+                return (CrucibleID)i;
+        return CrucibleID.None;
+    }
 }
