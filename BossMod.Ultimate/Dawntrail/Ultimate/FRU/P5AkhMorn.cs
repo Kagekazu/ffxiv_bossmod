@@ -40,8 +40,9 @@ class P5AkhMorn(BossModule module) : Components.UniformStackSpread(module, 4, 0,
     {
         if (Source != null && _leftSoakers.Any() && _fulgent?.NumCasts > 6)
         {
-            var dir = Source.Rotation + (_leftSoakers[slot] ? -45 : 45).Degrees(); // note that left group go to boss right!
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Source.Position + 5 * dir.ToDirection(), 1), _activation);
+            // true L/R of boss (left group -> boss right), further out than under the hitbox
+            var dir = Source.Rotation + (_leftSoakers[slot] ? -90 : 90).Degrees();
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Source.Position + 7 * dir.ToDirection(), 1), _activation);
         }
     }
 

@@ -334,11 +334,13 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
         if (_source == null)
             return;
 
-        var isBaiter = assignment == (_config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT);
+        // far bait: configured tank; close bait: the other tank (far tank stays out for both hits)
+        var farBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT;
+        var closeBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.MT : PartyRolesConfig.Assignment.OT;
         var origin = _source.Position;
         if (NumCasts == 0)
         {
-            if (isBaiter)
+            if (assignment == farBaiter)
             {
                 // hug the real wall so a ranged at max range is not still farther than a 19y pin
                 hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
@@ -364,7 +366,7 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
                 hints.AddForbiddenZone(ShapeDistance.InvertedCircle(origin, 8));
             }
         }
-        else if (isBaiter)
+        else if (assignment == closeBaiter)
         {
             hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
             var closest = Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Closest(origin);
@@ -374,6 +376,14 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
                 if (r > 1)
                     hints.AddForbiddenZone(ShapeDistance.Donut(origin, r, 100));
             }
+        }
+        else if (assignment == farBaiter)
+        {
+            // stay out for the close hit too
+            hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
+            var side = actor.Position.X >= Module.Center.X ? 1 : -1;
+            var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
         }
         else
         {

@@ -466,6 +466,8 @@ class P4CrystallizeTimeHints(BossModule module) : BossComponent(module)
     private WDir SafeOffsetDodgeFirstHourglassSouth(int side) => 19 * (side * 40).Degrees().ToDirection();
     private WDir SafeOffsetPreKnockbackSouth(int side, float radius) => radius * (side * 30).Degrees().ToDirection();
     private WDir SafeOffsetDarknessStack(int side) => 19 * (side * 140).Degrees().ToDirection();
+    // further W than darkness stack so first N/S maelstroms don't cover the spot
+    private WDir SafeOffsetEruptionPreposition(int side) => 19 * (side * 120).Degrees().ToDirection();
     private WDir SafeOffsetDodgeSecondHourglassSouth(int side) => 19 * (side * 20).Degrees().ToDirection();
     private WDir SafeOffsetDodgeSecondHourglassEW(int side) => 19 * (side * 80).Degrees().ToDirection(); // for ice that doesn't share unholy darkness
     private WDir SafeOffsetFirstHeadBait(int side) => 13 * (side * 90).Degrees().ToDirection();
@@ -526,7 +528,12 @@ class P4CrystallizeTimeHints(BossModule module) : BossComponent(module)
     private (WDir offset, Hint hint) HintFangEruption(int northSlowSide, int numHourglassesDone)
     {
         if (!DarknessDone)
+        {
+            if (numHourglassesDone < 2)
+                // final dark spot is clipped by first N glass; hold further W until it pops
+                return (SafeOffsetEruptionPreposition(northSlowSide), Hint.SafespotRough | Hint.Maelstrom);
             return (SafeOffsetDarknessStack(northSlowSide), Hint.SafespotRough | Hint.Heads | (numHourglassesDone < 4 ? Hint.Maelstrom : Hint.None));
+        }
         return (SafeOffsetChillNorth(-northSlowSide), Hint.Maelstrom | Hint.Mid);
     }
 
