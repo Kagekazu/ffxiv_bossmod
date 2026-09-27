@@ -34,20 +34,100 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
             return;
         }
 
-        // on thin ice the only legal moves are "stand" or the component's 32y slide
+        // same as Automatic movement: on thin ice a 1y nudge becomes a 32y slide, so only "stay" or "full slide" are legal
         var thinIce = Player.FindStatus(SID.ThinIce);
-
-        if (Bossmods.ActiveModule is FRU module && module.Raid.TryFindSlot(Player.InstanceID, out var playerSlot))
+        if (thinIce != null)
         {
-            var option = strategy.Option(Track.Movement);
-            var dest = CalculateDestination(module, primaryTarget, option, Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId]);
-            if (thinIce != null)
-                dest = module.FindComponent<P2TwinStillnessSilence>()?.SlideTarget(playerSlot, Player) ?? Player.Position;
-            SetForcedMovement(dest, 0.1f);
+            var distance = thinIce.Value.Extra * 0.1f;
+            Hints.AddForbiddenZone(ShapeDistance.Donut(Player.Position, 1, distance - 1), World.FutureTime(2));
         }
+
+        if (Bossmods.ActiveModule is not FRU module || !module.Raid.TryFindSlot(Player.InstanceID, out var playerSlot))
+            return;
+
+        var assignment = Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId];
+
+        // Wrath positionals after we know the encounter — skip during strict mechanic positioning
+        if (!SuppressPositionalGoals(module, assignment))
+            ApplyWrathPositionalGoals(primaryTarget);
+
+        var option = strategy.Option(Track.Movement);
+        var (dest, leeway) = CalculateDestination(module, primaryTarget, option, assignment);
+
+        // healer/caster: hold for slidecast if we can still reach safe after the cast; else cancel and run
+        if (ShouldHoldForSlidecast(leeway))
+            return;
+        if (dest != null && ShouldCancelCastForMovement(leeway))
+            Hints.ForceCancelCast = true;
+
+        SetForcedMovement(dest, thinIce != null ? 1.5f : 0.1f);
     }
 
-    private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
+    private bool ShouldHoldForSlidecast(float leeway)
+    {
+        if (Player.ClassCategory is not (ClassCategory.Healer or ClassCategory.Caster))
+            return false;
+        if (Player.CastInfo is not { EventHappened: false } cast)
+            return false;
+        var wait = Math.Max(0, cast.RemainingTime - 0.5f);
+        return leeway > wait;
+    }
+
+    private bool ShouldCancelCastForMovement(float leeway)
+    {
+        if (Player.ClassCategory is not (ClassCategory.Healer or ClassCategory.Caster))
+            return false;
+        if (Player.CastInfo is not { EventHappened: false } cast)
+            return false;
+        var wait = Math.Max(0, cast.RemainingTime - 0.5f);
+        return leeway <= wait;
+    }
+
+    private void ApplyWrathPositionalGoals(Actor? primaryTarget)
+    {
+        if (Player.ClassCategory != ClassCategory.Melee)
+            return;
+        if (Hints.RecommendedPositional.Target != null)
+            return; // VBM AR already owns positionals
+        if (!Player.InCombat || Player.FindStatus(ClassShared.SID.TrueNorth) != null)
+            return;
+
+        var hint = WrathPositionalIPC.Current;
+        if (hint == null)
+            return;
+
+        var h = hint.Value;
+        if (h.IsSatisfied)
+            return;
+
+        var target = FindActorByObjectId(h.TargetObjectId) ?? primaryTarget;
+        if (target == null || target.Omnidirectional)
+            return;
+        if (target is { TargetID: var t, CastInfo: null, IsStrikingDummy: false } && t == Player.InstanceID)
+            return;
+
+        var imminent = h.GcdsUntil <= 2;
+        var correct = h.Pos switch
+        {
+            Positional.Flank => MathF.Abs(target.Rotation.ToDirection().Dot((Player.Position - target.Position).Normalized())) < 0.7071067f,
+            Positional.Rear => target.Rotation.ToDirection().Dot((Player.Position - target.Position).Normalized()) < -0.7071068f,
+            _ => true
+        };
+        Hints.RecommendedPositional = (target, h.Pos, imminent, correct);
+        Hints.GoalZones.Add(Hints.GoalSingleTarget(target, h.Pos, Player, World.Actors));
+    }
+
+    private Actor? FindActorByObjectId(ulong objectId)
+    {
+        if (objectId == 0)
+            return null;
+        foreach (var a in World.Actors)
+            if (a.InstanceID == objectId || (uint)a.InstanceID == (uint)objectId)
+                return a;
+        return null;
+    }
+
+    private (WPos? dest, float leeway) CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
         var strat = strategy.As<MovementStrategy>();
         if (!Player.InCombat && strat is MovementStrategy.Pathfind or MovementStrategy.PathfindMeleeGreed)
@@ -57,12 +137,38 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         {
             MovementStrategy.Pathfind => PathfindPosition(null, assignment),
             MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment),
-            MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
-            MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
-            MovementStrategy.Prepull => PrepullPosition(module, assignment),
-            MovementStrategy.DragToCenter => DragToCenterPosition(module),
-            _ => null
+            MovementStrategy.Explicit => (ResolveTargetLocation(strategy.Value), LeewayOnly()),
+            MovementStrategy.ExplicitMelee => (ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget), LeewayOnly()),
+            MovementStrategy.Prepull => (PrepullPosition(module, assignment), float.MaxValue),
+            MovementStrategy.DragToCenter => (DragToCenterPosition(module), float.MaxValue),
+            _ => (null, float.MaxValue)
         };
+    }
+
+    private float LeewayOnly() => NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed()).LeewaySeconds;
+
+    private bool SuppressPositionalGoals(FRU module, PartyRolesConfig.Assignment assignment)
+    {
+        if (SuppressMeleeGreed(module, assignment))
+            return true;
+        // P1 clock-spot / bait AI — Wrath goals pull off PrecisePosition safespots
+        if (module.FindComponent<P1CyclonicBreakAIBait>() != null)
+            return true;
+        if (module.FindComponent<P1CyclonicBreakAIDodgeSpreadStack>() != null)
+            return true;
+        if (module.FindComponent<P1CyclonicBreakAIDodgeRest>() != null)
+            return true;
+        if (module.FindComponent<P1UtopianSkyAIInitial>() != null)
+            return true;
+        if (module.FindComponent<P1UtopianSkyAIResolve>() != null)
+            return true;
+        if (module.FindComponent<P1BoundOfFaithAIKnockback>() != null)
+            return true;
+        if (module.FindComponent<P1BoundOfFaithAIStack>() != null)
+            return true;
+        if (module.FindComponent<P1FallOfFaith>() != null)
+            return true;
+        return false;
     }
 
     private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
@@ -91,13 +197,12 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         return false;
     }
 
-    // TODO: account for leeway for casters
-    private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
+    private (WPos dest, float leeway) PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
     {
         var navi = NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed());
         var dest = navi.Destination ?? Player.Position;
         if (maxRangeTarget == null)
-            return dest;
+            return (dest, navi.LeewaySeconds);
 
         const float greedTolerance = 0.15f;
         var isRanged = FRU.StandsRanged(assignment, Player);
@@ -105,7 +210,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         var toDest = dest - maxRangeTarget.Position;
         var range = toDest.Length();
         if (range <= maxRange || navi.LeewaySeconds <= 0)
-            return dest;
+            return (dest, navi.LeewaySeconds);
 
         var dir = range > 0.1f ? toDest / range : (Player.Position - maxRangeTarget.Position);
         if (dir.LengthSq() < 0.01f)
@@ -119,8 +224,8 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         var snapG = map.InBounds(snapGrid.x, snapGrid.y) ? map.PixelMaxG.BoundSafeAt(map.GridToIndex(snapGrid)) : 0;
         var curG = map.PixelMaxG.BoundSafeAt(NavigationContext.ThetaStar.StartNodeIndex);
         if (snapG >= curG)
-            return snap;
-        return Player.DistanceToHitbox(maxRangeTarget) <= maxRange ? Player.Position : dest;
+            return (snap, navi.LeewaySeconds);
+        return (Player.DistanceToHitbox(maxRangeTarget) <= maxRange ? Player.Position : dest, navi.LeewaySeconds);
     }
 
     private WPos ExplicitMeleePosition(WPos ideal, Actor? target) => target != null ? ClosestInMelee(ideal, target) : ideal;

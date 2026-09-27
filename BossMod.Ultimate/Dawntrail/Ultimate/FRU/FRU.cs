@@ -21,8 +21,8 @@ class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, A
             return;
         }
 
-        // both tanks take the cone out, opposite the party, from the start of the cast
-        var dest = Source.Position + 14 * _away;
+        // both tanks take the cone opposite the party, staying in max melee
+        var dest = Source.Position + (Source.HitboxRadius + 3.25f) * _away;
         if (actor.Role == Role.Tank)
         {
             if (actor == Target)

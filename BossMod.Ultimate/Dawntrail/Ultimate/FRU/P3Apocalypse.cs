@@ -429,10 +429,6 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
         if (_apoc?.Starting == null || _water == null)
             return;
 
-        // add imminent apoc aoes
-        foreach (var aoe in _apoc.ActiveAOEs(slot, actor))
-            hints.AddForbiddenZone(aoe.Shape.Distance(aoe.Origin, aoe.Rotation), aoe.Activation);
-
         ref var state = ref _water.States[slot];
         if (state.AssignedGroup == 0)
             return; // no assignments - oh well
@@ -451,16 +447,40 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
             distance = _water.Stacks.Count == 0 ? 19 : 10;
         }
 
-        var destOff = distance * (midDir - _apoc.Rotation).ToDirection();
+        // small per-role offsets so the stack isn't 4 people on the MT's pixel
+        var (angleOff, rangeAdj) = distance < 15
+            ? state.AssignedPosition switch
+            {
+                0 => (-12.Degrees(), 0f),
+                1 => (12.Degrees(), 0f),
+                2 => (-8.Degrees(), 1.5f),
+                3 => (8.Degrees(), 1.5f),
+                _ => (default(Angle), 0f)
+            }
+            : (default(Angle), 0f);
+
+        var destOff = (distance + rangeAdj) * (midDir - _apoc.Rotation + angleOff).ToDirection();
         var dest = Module.Center + destOff;
+        var far = (actor.Position - dest).LengthSq() > 4f * 4f;
+        // only dodge puddles that resolve very soon while sprinting in from 19y; later ones caused long detours and late arrivals
+        foreach (var aoe in _apoc.ActiveAOEs(slot, actor))
+            if (!far || aoe.Activation <= WorldState.FutureTime(1.2f))
+                hints.AddForbiddenZone(aoe.Shape.Distance(aoe.Origin, aoe.Rotation), aoe.Activation);
+
+        // stack deadline (not MaxValue) so this competes with apoc aoes; PrecisePosition while far so ranged commit immediately
+        var deadline = _water.Stacks.Count > 0 ? _water.Stacks[0].Activation : WorldState.FutureTime(5);
         if (distance >= 19)
         {
             hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
-            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f), deadline);
+        }
+        else if (far)
+        {
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.5f), deadline);
         }
         else
         {
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), DateTime.MaxValue);
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), deadline);
         }
     }
 }

@@ -102,9 +102,24 @@ class P1CyclonicBreakAIBait(BossModule module) : BossComponent(module)
             return; // no assignment
         var origin = Module.PrimaryActor.Position;
         var dir = (180 - 45 * clockspot).Degrees().ToDirection();
-        var dist = _spreadStack.Spreads.Count > 0
-            ? (FRU.StandsRanged(assignment, actor) ? 14f : 8f) // 6y spreads: melee at max melee, ranged outer
-            : 7f; // pairs: same ring so adjacent support/DD clocks are in stack range
+        var isRanged = FRU.StandsRanged(assignment, actor);
+        // spread: melee maxmelee; ranged stay in for opener (phlegma) until ~2.5s before protean, then outer
+        // pairs: same ring so adjacent support/DD clocks are in stack range
+        float dist;
+        if (_spreadStack.Spreads.Count > 0)
+        {
+            // stay in for opener (phlegma etc.); ForcedMovement would override manual stay-in if we pin early
+            var goOut = Module.PrimaryActor.CastInfo is { } ci
+                ? Module.CastFinishAt(ci) <= WorldState.FutureTime(2f)
+                : _spreadStack.Activation <= WorldState.FutureTime(4.7f);
+            if (isRanged && !goOut)
+                return;
+            dist = isRanged ? 14f : 8f;
+        }
+        else
+        {
+            dist = 7f;
+        }
         hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin + dist * dir, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
     }
 }
