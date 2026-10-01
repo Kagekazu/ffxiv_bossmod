@@ -1,4 +1,5 @@
-﻿namespace BossMod.Global.Crucible.SphinxPiece;
+﻿#pragma warning disable CA1707 // Identifiers should not contain underscores
+namespace BossMod.Global.Crucible.SphinxPiece;
 
 public enum OID : uint
 {
@@ -199,7 +200,7 @@ class BeastShuffle(BossModule module) : BossComponent(module)
                     _targetID = (uint)OID._Gen_OpoOpoPiece;
                     break;
                 case 6:
-                    _targetID = (uint)OID._Gen_PukPiece;
+                    _targetID = (uint)OID._Gen_PugilPiece;
                     break;
             }
         }
@@ -229,5 +230,5 @@ class SphinxPieceStates : StateMachineBuilder
 }
 
 [ModuleInfo(Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1092, NameID = 14665)]
-public class SphinxPiece(WorldState ws, Actor primary) : BossModule(ws, primary, new(120, 0), new ArenaBoundsSquare(20));
+public class SphinxPiece(ModuleInit init) : BossModule(init, new(120, 0), new ArenaBoundsSquare(20));
 

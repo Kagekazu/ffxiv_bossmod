@@ -44,6 +44,8 @@ public enum SID : uint
     _Gen_Confused = 1283, // 4C5D->player, extra=0x0
     _Gen_RightFace = 2164, // Boss->player, extra=0x0
     _Gen_LeftFace = 2163, // Boss->player, extra=0x0
+    _Gen_WitsEnd = 5424, // Helper->player, extra=0x1/0x2/0x3
+    _Gen_Bind = 5710, // _Gen_CrawlingPiece->player, extra=0x0
 }
 
 class SongOfTorment(BossModule module) : Components.SingleTargetCast(module, AID._Weaponskill_SongOfTorment);
@@ -73,10 +75,39 @@ class UnmooringMelody(BossModule module) : Components.GenericAOEs(module, AID._W
                 break;
         }
     }
+
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        base.AddAIHints(slot, actor, assignment, hints);
+
+        if (hints.FindEnemy(Module.PrimaryActor) is not { } primary)
+            return;
+
+        if (_aoe == null)
+            primary.DesiredPosition = Arena.Center;
+        else
+            primary.CanMove = false;
+    }
 }
 class FeralLunge(BossModule module) : Components.StandardAOEs(module, AID._Weaponskill_FeralLunge1, new AOEShapeRect(50, 8));
 
-class Adds(BossModule module) : Components.AddsMulti(module, [OID._Gen_ShamblingPiece, OID._Gen_CrawlingPiece]);
+class ShamblingPiece(BossModule module) : ProximityAdds(module, OID._Gen_ShamblingPiece);
+class CrawlingPiece(BossModule module) : Components.Adds(module, (uint)OID._Gen_CrawlingPiece)
+{
+    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
+    {
+        foreach (var target in hints.PotentialTargets.Where(t => t.Actor.OID == (uint)OID._Gen_CrawlingPiece))
+        {
+            if (actor.FindStatus(SID._Gen_Bind) != null)
+                target.Priority = 1;
+            else
+            {
+                target.Priority = 0;
+                hints.AddForbiddenZone(ShapeDistance.Capsule(target.Actor.Position, target.Actor.Rotation, 5, 2), DateTime.MaxValue);
+            }
+        }
+    }
+}
 
 class DeadMansDirge1(BossModule module) : Components.StandardAOEs(module, AID._Weaponskill_DeadMansDirge1, 12);
 class DeadMansDirge2(BossModule module) : Components.StandardAOEs(module, AID._Weaponskill_DeadMansDirge3, new AOEShapeDonut(2, 43));
@@ -111,7 +142,8 @@ class SirenPieceStates : StateMachineBuilder
             .ActivateOnEnter<SongOfTorment>()
             .ActivateOnEnter<UnmooringMelody>()
             .ActivateOnEnter<FeralLunge>()
-            .ActivateOnEnter<Adds>()
+            .ActivateOnEnter<ShamblingPiece>()
+            .ActivateOnEnter<CrawlingPiece>()
             .ActivateOnEnter<Wallop>()
             .ActivateOnEnter<DeadMansDirge1>()
             .ActivateOnEnter<DeadMansDirge2>()
@@ -121,5 +153,5 @@ class SirenPieceStates : StateMachineBuilder
 }
 
 [ModuleInfo(Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1090, NameID = 14583)]
-public class SirenPiece(WorldState ws, Actor primary) : BossModule(ws, primary, new(120, -420), new ArenaBoundsCircle(20));
+public class SirenPiece(ModuleInit init) : BossModule(init, new(120, -420), new ArenaBoundsCircle(20));
 
