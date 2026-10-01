@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 // tethers & general assignments
 class P4DarklitDragonsong(BossModule module) : BossComponent(module)

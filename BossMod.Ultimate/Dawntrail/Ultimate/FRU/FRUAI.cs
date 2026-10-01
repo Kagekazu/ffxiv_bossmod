@@ -1,4 +1,4 @@
-using BossMod.AI;
+﻿using BossMod.AI;
 using BossMod.Autorotation;
 using BossMod.Pathfinding;
 
@@ -47,85 +47,26 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
 
         var assignment = Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId];
 
-        // Wrath positionals after we know the encounter — skip during strict mechanic positioning
-        if (!SuppressPositionalGoals(module, assignment))
-            ApplyWrathPositionalGoals(primaryTarget);
-
         var option = strategy.Option(Track.Movement);
         var (dest, leeway) = CalculateDestination(module, primaryTarget, option, assignment);
 
         // healer/caster: hold for slidecast if we can still reach safe after the cast; else cancel and run
-        if (ShouldHoldForSlidecast(leeway))
-            return;
-        if (dest != null && ShouldCancelCastForMovement(leeway))
-            Hints.ForceCancelCast = true;
+        if (CastWaitTime() is { } wait)
+        {
+            if (leeway > wait)
+                return;
+            if (dest != null)
+                Hints.ForceCancelCast = true;
+        }
 
         SetForcedMovement(dest, thinIce != null ? 1.5f : 0.1f);
     }
 
-    private bool ShouldHoldForSlidecast(float leeway)
-    {
-        if (Player.ClassCategory is not (ClassCategory.Healer or ClassCategory.Caster))
-            return false;
-        if (Player.CastInfo is not { EventHappened: false } cast)
-            return false;
-        var wait = Math.Max(0, cast.RemainingTime - 0.5f);
-        return leeway > wait;
-    }
-
-    private bool ShouldCancelCastForMovement(float leeway)
-    {
-        if (Player.ClassCategory is not (ClassCategory.Healer or ClassCategory.Caster))
-            return false;
-        if (Player.CastInfo is not { EventHappened: false } cast)
-            return false;
-        var wait = Math.Max(0, cast.RemainingTime - 0.5f);
-        return leeway <= wait;
-    }
-
-    private void ApplyWrathPositionalGoals(Actor? primaryTarget)
-    {
-        if (Player.ClassCategory != ClassCategory.Melee)
-            return;
-        if (Hints.RecommendedPositional.Target != null)
-            return; // VBM AR already owns positionals
-        if (!Player.InCombat || Player.FindStatus(ClassShared.SID.TrueNorth) != null)
-            return;
-
-        var hint = WrathPositionalIPC.Current;
-        if (hint == null)
-            return;
-
-        var h = hint.Value;
-        if (h.IsSatisfied)
-            return;
-
-        var target = FindActorByObjectId(h.TargetObjectId) ?? primaryTarget;
-        if (target == null || target.Omnidirectional)
-            return;
-        if (target is { TargetID: var t, CastInfo: null, IsStrikingDummy: false } && t == Player.InstanceID)
-            return;
-
-        var imminent = h.GcdsUntil <= 2;
-        var correct = h.Pos switch
-        {
-            Positional.Flank => MathF.Abs(target.Rotation.ToDirection().Dot((Player.Position - target.Position).Normalized())) < 0.7071067f,
-            Positional.Rear => target.Rotation.ToDirection().Dot((Player.Position - target.Position).Normalized()) < -0.7071068f,
-            _ => true
-        };
-        Hints.RecommendedPositional = (target, h.Pos, imminent, correct);
-        Hints.GoalZones.Add(Hints.GoalSingleTarget(target, h.Pos, Player, World.Actors));
-    }
-
-    private Actor? FindActorByObjectId(ulong objectId)
-    {
-        if (objectId == 0)
-            return null;
-        foreach (var a in World.Actors)
-            if (a.InstanceID == objectId || (uint)a.InstanceID == (uint)objectId)
-                return a;
-        return null;
-    }
+    // time until the current cast can be slid out of; null if not a healer/caster mid-cast
+    private float? CastWaitTime()
+        => Player.ClassCategory is ClassCategory.Healer or ClassCategory.Caster && Player.CastInfo is { EventHappened: false } cast
+            ? Math.Max(0, cast.RemainingTime - 0.5f)
+            : null;
 
     private (WPos? dest, float leeway) CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
@@ -146,30 +87,6 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
     }
 
     private float LeewayOnly() => NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed()).LeewaySeconds;
-
-    private bool SuppressPositionalGoals(FRU module, PartyRolesConfig.Assignment assignment)
-    {
-        if (SuppressMeleeGreed(module, assignment))
-            return true;
-        // P1 clock-spot / bait AI — Wrath goals pull off PrecisePosition safespots
-        if (module.FindComponent<P1CyclonicBreakAIBait>() != null)
-            return true;
-        if (module.FindComponent<P1CyclonicBreakAIDodgeSpreadStack>() != null)
-            return true;
-        if (module.FindComponent<P1CyclonicBreakAIDodgeRest>() != null)
-            return true;
-        if (module.FindComponent<P1UtopianSkyAIInitial>() != null)
-            return true;
-        if (module.FindComponent<P1UtopianSkyAIResolve>() != null)
-            return true;
-        if (module.FindComponent<P1BoundOfFaithAIKnockback>() != null)
-            return true;
-        if (module.FindComponent<P1BoundOfFaithAIStack>() != null)
-            return true;
-        if (module.FindComponent<P1FallOfFaith>() != null)
-            return true;
-        return false;
-    }
 
     private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
     {
@@ -212,11 +129,8 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         if (range <= maxRange || navi.LeewaySeconds <= 0)
             return (dest, navi.LeewaySeconds);
 
-        var dir = range > 0.1f ? toDest / range : (Player.Position - maxRangeTarget.Position);
-        if (dir.LengthSq() < 0.01f)
-            dir = new WDir(0, -1);
-        else
-            dir = dir.Normalized();
+        var dir = range > 0.1f ? toDest / range : Player.Position - maxRangeTarget.Position;
+        dir = dir.LengthSq() < 0.01f ? new WDir(0, -1) : dir.Normalized();
 
         var snap = maxRangeTarget.Position + maxRange * dir;
         var map = NavigationContext.Map;

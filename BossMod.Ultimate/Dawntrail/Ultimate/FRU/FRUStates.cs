@@ -489,7 +489,7 @@ class FRUStates : StateMachineBuilder
         ComponentCondition<P3ApocalypseDarkEruption>(id + 0x44, 0.7f, comp => comp.NumFinishedSpreads > 0, "Spread")
             .DeactivateOnExit<P3ApocalypseDarkEruption>()
             .ExecOnExit<P3ApocalypseDarkWater>(comp => comp.ShowOrder(2))
-            .OnExit(() => _module.ActivateComponent<P3ApocalypseAIWater2>()); // pull the instant spreads resolve (OnEnter fought the 19y pin)
+            .OnExit(_module.ActivateComponent<P3ApocalypseAIWater2>); // pull the instant spreads resolve (OnEnter fought the 19y pin)
         ComponentCondition<P3Apocalypse>(id + 0x45, 1.3f, comp => comp.NumCasts >= 16);
         ActorCastStart(id + 0x50, _module.BossP3, AID.DarkestDance, 1.3f, true);
         ComponentCondition<P3Apocalypse>(id + 0x51, 0.7f, comp => comp.NumCasts >= 22);

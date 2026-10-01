@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P1CyclonicBreakSpreadStack(BossModule module) : Components.UniformStackSpread(module, 6, 6, 2, 2, true)
 {
@@ -103,12 +103,11 @@ class P1CyclonicBreakAIBait(BossModule module) : BossComponent(module)
         var origin = Module.PrimaryActor.Position;
         var dir = (180 - 45 * clockspot).Degrees().ToDirection();
         var isRanged = FRU.StandsRanged(assignment, actor);
-        // spread: melee maxmelee; ranged stay in for opener (phlegma) until ~2.5s before protean, then outer
+        // spread: melee maxmelee; ranged stay in for opener (phlegma) until ~2s before protean, then outer
         // pairs: same ring so adjacent support/DD clocks are in stack range
         float dist;
         if (_spreadStack.Spreads.Count > 0)
         {
-            // stay in for opener (phlegma etc.); ForcedMovement would override manual stay-in if we pin early
             var goOut = Module.PrimaryActor.CastInfo is { } ci
                 ? Module.CastFinishAt(ci) <= WorldState.FutureTime(2f)
                 : _spreadStack.Activation <= WorldState.FutureTime(4.7f);

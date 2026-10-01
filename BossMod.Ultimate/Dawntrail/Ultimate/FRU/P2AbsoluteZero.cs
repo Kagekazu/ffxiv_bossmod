@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2AbsoluteZero(BossModule module) : Components.CastCounter(module, AID.AbsoluteZeroAOE);
 
