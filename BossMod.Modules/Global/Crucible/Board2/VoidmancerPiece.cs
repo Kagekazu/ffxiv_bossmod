@@ -70,7 +70,7 @@ class DeathDriveBait(BossModule module) : Components.GenericBaitAway(module, cen
         base.DrawArenaForeground(pcSlot, pc);
 
         if (CurrentBaits.Count > 0)
-            foreach (var m in Module.Enemies(OID._Gen_ZombiePiece))
+            foreach (var m in Module.Enemies(OID._Gen_ZombiePiece).Where(z => z.IsDead))
                 Arena.AddCircle(m.Position, 0.75f, ArenaColor.Object);
     }
 
@@ -94,7 +94,7 @@ class DeathDriveBait(BossModule module) : Components.GenericBaitAway(module, cen
 }
 
 class DeathDrive(BossModule module) : Components.StandardAOEs(module, AID._Weaponskill_DeathDrive1, 10);
-class ZombiePiece(BossModule module) : Components.Adds(module, (uint)OID._Gen_ZombiePiece);
+class ZombiePiece(BossModule module) : ProximityAdds(module, OID._Gen_ZombiePiece);
 class DarkOrb(BossModule module) : Components.StandardAOEs(module, AID._Spell_DarkOrb1, 18);
 class EvilMist(BossModule module) : Components.RaidwideCast(module, AID._Weaponskill_EvilMist);
 
@@ -145,5 +145,5 @@ class VoidmancerPieceStates : StateMachineBuilder
 }
 
 [ModuleInfo(Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1089, NameID = 14552)]
-public class VoidmancerPiece(WorldState ws, Actor primary) : BossModule(ws, primary, new(120, 0), new ArenaBoundsSquare(20));
+public class VoidmancerPiece(ModuleInit init) : BossModule(init, new(120, 0), new ArenaBoundsSquare(20));
 

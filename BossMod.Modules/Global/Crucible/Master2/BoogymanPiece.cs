@@ -1,4 +1,4 @@
-﻿
+﻿#pragma warning disable CA1707 // Identifiers should not contain underscores
 namespace BossMod.Global.Crucible.BoogymanPiece;
 
 public enum OID : uint
@@ -171,4 +171,4 @@ class BoogymanPieceStates : StateMachineBuilder
 }
 
 [ModuleInfo(Incomplete = true, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1092, NameID = 14638)]
-public class BoogymanPiece(WorldState ws, Actor primary) : BossModule(ws, primary, new(120, -420), new ArenaBoundsCircle(20));
+public class BoogymanPiece(ModuleInit init) : BossModule(init, new(120, -420), new ArenaBoundsCircle(20));
