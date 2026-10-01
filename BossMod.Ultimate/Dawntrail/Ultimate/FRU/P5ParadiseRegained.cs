@@ -29,11 +29,10 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
             {
                 var south = _southDir.Normalized();
                 var side = group == 1 ? south.OrthoR() : south.OrthoL();
-                // dark (closest tether): stay max melee so OT can sit in the hitbox
-                // light (farthest tether): go in so OT can be farthest
+                // dark (closest tether): left/right of the south tower at max melee so OT can sit in the hitbox
+                // light (farthest tether): step in so OT can be farthest
                 var baits = Module.FindComponent<P5ParadiseRegainedBaits>();
                 var dpsIn = baits is { Active: true, TetherClosest: false };
-                // dark: left/right of the south tower at max melee; light: step in so OT can be farthest
                 var dest = Module.Center + (dpsIn ? 3 : 7) * south + (dpsIn ? 2 : 4) * side;
                 hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), WorldState.CurrentTime);
             }
@@ -94,10 +93,9 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
     private Actor? _firstTarget;
     private AOEShapeCone? _curCleave;
     private DateTime _activation;
-    private bool _tetherClosest;
+    public bool TetherClosest { get; private set; }
 
     public bool Active => _source != null;
-    public bool TetherClosest => _tetherClosest;
 
     private static readonly AOEShapeCone _shapeCleaveL = new(19, 120.Degrees(), 60.Degrees()); // note: looks wrong with correct range...
     private static readonly AOEShapeCone _shapeCleaveD = new(19, 120.Degrees(), -60.Degrees());
@@ -111,7 +109,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             var cleaveTarget = NumCasts == 0 ? _firstTarget : WorldState.Actors.Find(_source.TargetID);
             if (cleaveTarget != null)
                 CurrentBaits.Add(new(_source, cleaveTarget, _curCleave, _activation));
-            var tetherTarget = _tetherClosest ? Raid.WithoutSlot().Closest(_source.Position) : Raid.WithoutSlot().Farthest(_source.Position);
+            var tetherTarget = TetherClosest ? Raid.WithoutSlot().Closest(_source.Position) : Raid.WithoutSlot().Farthest(_source.Position);
             if (tetherTarget != null)
                 CurrentBaits.Add(new(tetherTarget, tetherTarget, _shapeTether, _activation)); // +0.7s?
         }
@@ -128,7 +126,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             var firstTankShouldBaitTether = NumCasts > 0; // TODO: can a tank bait cleave+tether with invuln?
             var shouldBaitTether = isFirstTank == firstTankShouldBaitTether;
             if (shouldBaitTether && CurrentBaits[1].Target != actor)
-                hints.Add(_tetherClosest ? "Go closer!" : "Go farther!");
+                hints.Add(TetherClosest ? "Go closer!" : "Go farther!");
         }
 
         base.AddHints(slot, actor, hints);
@@ -177,7 +175,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             _firstTarget = WorldState.Actors.Find(caster.TargetID);
             _curCleave = shape;
             _activation = Module.CastFinishAt(spell, 0.3f);
-            _tetherClosest = closest;
+            TetherClosest = closest;
         }
     }
 
@@ -194,7 +192,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             ++NumCasts;
             _curCleave = nextShape;
             _activation = WorldState.FutureTime(3.7f);
-            _tetherClosest = !_tetherClosest;
+            TetherClosest = !TetherClosest;
         }
     }
 
@@ -218,7 +216,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             else
             {
                 // bait tether across south
-                return (_tetherClosest ? 2 : 10) * (southDir + 180.Degrees()).ToDirection();
+                return (TetherClosest ? 2 : 10) * (southDir + 180.Degrees()).ToDirection();
             }
         }
         else
@@ -228,7 +226,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
                 // bait cleave, so that north is safe
                 return 7 * (southDir - _curCleave.DirectionOffset).ToDirection();
             }
-            else if (_tetherClosest)
+            else if (TetherClosest)
             {
                 // bait tether at south
                 return 2 * southDir.ToDirection();

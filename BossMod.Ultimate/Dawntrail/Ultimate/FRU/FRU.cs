@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2QuadrupleSlap(BossModule module) : Components.TankSwap(module, AID.QuadrupleSlapFirst, AID.QuadrupleSlapFirst, AID.QuadrupleSlapSecond, 4.1f, null, true);
 class P3Junction(BossModule module) : Components.CastCounter(module, AID.Junction);

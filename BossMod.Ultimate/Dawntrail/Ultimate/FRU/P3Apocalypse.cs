@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P3Apocalypse(BossModule module) : Components.GenericAOEs(module)
 {
@@ -455,9 +455,9 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
                 1 => (12.Degrees(), 0f),
                 2 => (-8.Degrees(), 1.5f),
                 3 => (8.Degrees(), 1.5f),
-                _ => (default(Angle), 0f)
+                _ => (default, 0f)
             }
-            : (default(Angle), 0f);
+            : (default, 0f);
 
         var destOff = (distance + rangeAdj) * (midDir - _apoc.Rotation + angleOff).ToDirection();
         var dest = Module.Center + destOff;

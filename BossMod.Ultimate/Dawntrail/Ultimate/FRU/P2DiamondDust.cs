@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2AxeKick(BossModule module) : Components.StandardAOEs(module, AID.AxeKick, new AOEShapeCircle(16));
 class P2ScytheKick(BossModule module) : Components.StandardAOEs(module, AID.ScytheKick, new AOEShapeDonut(4, 20));

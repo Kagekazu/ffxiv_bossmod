@@ -1,4 +1,4 @@
-namespace BossMod.Dawntrail.Ultimate.FRU;
+﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P3UltimateRelativity(BossModule module) : Components.CastCounter(module, default)
 {
