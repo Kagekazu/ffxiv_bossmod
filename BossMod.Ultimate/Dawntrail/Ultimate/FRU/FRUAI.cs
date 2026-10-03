@@ -48,25 +48,9 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         var assignment = Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId];
 
         var option = strategy.Option(Track.Movement);
-        var (dest, leeway) = CalculateDestination(module, primaryTarget, option, assignment);
-
-        // healer/caster: hold for slidecast if we can still reach safe after the cast; else cancel and run
-        if (CastWaitTime() is { } wait)
-        {
-            if (leeway > wait)
-                return;
-            if (dest != null)
-                Hints.ForceCancelCast = true;
-        }
-
+        var (dest, _) = CalculateDestination(module, primaryTarget, option, assignment);
         SetForcedMovement(dest, thinIce != null ? 1.5f : 0.1f);
     }
-
-    // time until the current cast can be slid out of; null if not a healer/caster mid-cast
-    private float? CastWaitTime()
-        => Player.ClassCategory is ClassCategory.Healer or ClassCategory.Caster && Player.CastInfo is { EventHappened: false } cast
-            ? Math.Max(0, cast.RemainingTime - 0.5f)
-            : null;
 
     private (WPos? dest, float leeway) CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
