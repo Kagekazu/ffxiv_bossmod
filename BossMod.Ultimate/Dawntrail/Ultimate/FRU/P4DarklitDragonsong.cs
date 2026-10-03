@@ -355,15 +355,9 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
                         hints.AddForbiddenZone(ShapeDistance.Circle(origin, r));
                 }
             }
-            else if (FRU.StandsRanged(assignment, actor))
-            {
-                // stay out of melee but still closer than the wall bait
-                hints.AddForbiddenZone(ShapeDistance.Circle(origin, 12));
-                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(origin, 16));
-            }
             else
             {
-                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(origin, 8));
+                base.AddAIHints(slot, actor, assignment, hints);
             }
         }
         else if (assignment == closeBaiter)
@@ -387,7 +381,7 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
         }
         else
         {
-            hints.AddForbiddenZone(ShapeDistance.Circle(origin, 10));
+            base.AddAIHints(slot, actor, assignment, hints);
         }
     }
 

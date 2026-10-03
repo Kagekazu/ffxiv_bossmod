@@ -36,6 +36,8 @@ class P3Apocalypse(BossModule module) : Components.GenericAOEs(module)
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes.Take(6);
 
+    public IEnumerable<AOEInstance> AOEsUntil(DateTime deadline) => _aoes.Where(aoe => aoe.Activation <= deadline);
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints) { } // we have dedicated components for this...
 
     public override void OnActorCreated(Actor actor)
@@ -429,6 +431,11 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
         if (_apoc?.Starting == null || _water == null)
             return;
 
+        // add apoc aoes until the stack resolves
+        var deadline = _water.Stacks.Count > 0 ? _water.Stacks.Max(s => s.Activation) : WorldState.FutureTime(4);
+        foreach (var aoe in _apoc.AOEsUntil(deadline))
+            hints.AddForbiddenZone(aoe.Shape.Distance(aoe.Origin, aoe.Rotation), aoe.Activation);
+
         ref var state = ref _water.States[slot];
         if (state.AssignedGroup == 0)
             return; // no assignments - oh well
@@ -447,41 +454,8 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
             distance = _water.Stacks.Count == 0 ? 19 : 10;
         }
 
-        // small per-role offsets so the stack isn't 4 people on the MT's pixel
-        var (angleOff, rangeAdj) = distance < 15
-            ? state.AssignedPosition switch
-            {
-                0 => (-12.Degrees(), 0f),
-                1 => (12.Degrees(), 0f),
-                2 => (-8.Degrees(), 1.5f),
-                3 => (8.Degrees(), 1.5f),
-                _ => (default, 0f)
-            }
-            : (default, 0f);
-
-        var destOff = (distance + rangeAdj) * (midDir - _apoc.Rotation + angleOff).ToDirection();
-        var dest = Module.Center + destOff;
-        var far = (actor.Position - dest).LengthSq() > 4f * 4f;
-        // only dodge puddles that resolve very soon while sprinting in from 19y; later ones caused long detours and late arrivals
-        foreach (var aoe in _apoc.ActiveAOEs(slot, actor))
-            if (!far || aoe.Activation <= WorldState.FutureTime(1.2f))
-                hints.AddForbiddenZone(aoe.Shape.Distance(aoe.Origin, aoe.Rotation), aoe.Activation);
-
-        // stack deadline (not MaxValue) so this competes with apoc aoes; PrecisePosition while far so ranged commit immediately
-        var deadline = _water.Stacks.Count > 0 ? _water.Stacks[0].Activation : WorldState.FutureTime(5);
-        if (distance >= 19)
-        {
-            hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
-            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f), deadline);
-        }
-        else if (far)
-        {
-            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.5f), deadline);
-        }
-        else
-        {
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), deadline);
-        }
+        var destOff = distance * (midDir - _apoc.Rotation).ToDirection();
+        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + destOff, 1), DateTime.MaxValue);
     }
 }
 

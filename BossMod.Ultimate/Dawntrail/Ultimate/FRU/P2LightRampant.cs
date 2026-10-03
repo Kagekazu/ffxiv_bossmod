@@ -375,6 +375,7 @@ class P2LightRampantAIStackPrepos(BossModule module) : BossComponent(module)
                 return; // don't move _too_ fast as a baiter
         }
         hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), DateTime.MaxValue);
+        P2LightRampantAIStackResolve.LeavePuddleTowards(Module, actor, dest, hints);
     }
 }
 
@@ -418,7 +419,15 @@ class P2LightRampantAIStackResolve(BossModule module) : BossComponent(module)
             var dirToDest = destPos - stackTarget.Position;
             var dest = dirToDest.LengthSq() <= 4 ? destPos : stackTarget.Position + 2 * dirToDest.Normalized();
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), DateTime.MaxValue);
+            LeavePuddleTowards(Module, actor, dest, hints);
         }
+    }
+
+    public static void LeavePuddleTowards(BossModule module, Actor actor, WPos dest, AIHints hints)
+    {
+        var puddles = module.FindComponent<P2SinboundHolyVoidzone>();
+        if (puddles != null && puddles.Sources.Any(s => actor.Position.InCircle(s.Position, puddles.Shape.Radius)))
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, (actor.Position - dest).Length() + 0.5f));
     }
 
     private bool IsNorthCamp(Actor actor) => actor.Position.Z < Module.Center.Z;
