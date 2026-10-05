@@ -294,10 +294,10 @@ class P2SinboundHoly(BossModule module) : Components.UniformStackSpread(module, 
             master = null; // our closest healer is too far away or too close to center, something is wrong (maybe kb didn't finish yet, or healer fucked up)
 
         // determine movement speed and direction
-        // baseline is towards safety (opposite boss), or CW (arbitrary) if there's no obvious safe direction
         // however, if we're non-healer, it is overridden by healer's decision (we can slide over later)
         var moveQuickly = _destinationDir == default;
-        var preferredDir = !moveQuickly ? _destinationDir : (actor.Position - Module.Center).Normalized().OrthoR();
+        var radial = (actor.Position - Module.Center).Normalized();
+        var preferredDir = GoCCW(actor, master) ? radial.OrthoL() : radial.OrthoR();
         moveQuickly &= NumCasts > 0; // don't start moving while waiting for first cast
 
         var waitForMaster = false;
@@ -333,6 +333,17 @@ class P2SinboundHoly(BossModule module) : Components.UniformStackSpread(module, 
             var planeOffset = moveQuickly ? 2 : -2; // if we're moving quickly, mark our current spot as forbidden
             hints.AddForbiddenZone(ShapeDistance.HalfPlane(Module.Center + planeOffset * preferredDir, preferredDir), hintTime);
         }
+    }
+
+    private bool GoCCW(Actor actor, Actor? master)
+    {
+        var oracle = Module.Enemies(OID.OraclesReflection).FirstOrDefault();
+        if (oracle == null)
+            return false;
+        var group = master ?? actor;
+        var groupPos = NumCasts > 0 && Raid.TryFindSlot(group, out var groupSlot) ? _initialSpots[groupSlot] : group.Position;
+        var cwOffset = (Angle.FromDirection(groupPos - Module.Center) - Angle.FromDirection(oracle.Position - Module.Center)).Normalized().Deg;
+        return cwOffset is >= 22.5f and <= 67.5f;
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
