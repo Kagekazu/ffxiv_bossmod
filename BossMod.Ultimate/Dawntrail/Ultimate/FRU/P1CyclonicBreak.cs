@@ -129,6 +129,7 @@ class P1CyclonicBreakAIDodgeSpreadStack(BossModule module) : BossComponent(modul
     private readonly P1CyclonicBreakSpreadStack? _spreadStack = module.FindComponent<P1CyclonicBreakSpreadStack>();
     private readonly P1CyclonicBreakCone? _cones = module.FindComponent<P1CyclonicBreakCone>();
     private readonly ArcList _forbiddenDirections = new(module.PrimaryActor.Position, 0);
+    private static readonly Angle MinSafeArc = 12.Degrees();
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
@@ -139,6 +140,9 @@ class P1CyclonicBreakAIDodgeSpreadStack(BossModule module) : BossComponent(modul
         _forbiddenDirections.Forbidden.Clear();
         foreach (var aoe in _cones.AOEs)
             _forbiddenDirections.ForbidArcByLength(aoe.Rotation, P1CyclonicBreakCone.Shape.HalfAngle);
+        foreach (var (min, max) in _forbiddenDirections.Allowed(default).ToList())
+            if (max.Rad - min.Rad < MinSafeArc.Rad)
+                _forbiddenDirections.ForbidArc(min.Normalized(), max.Normalized());
 
         var isSupport = actor.Class.IsSupport();
         var dodgeCCW = _spreadStack.Stacks.Count > 0 ? _config.P1CyclonicBreakStackSupportsCCW == isSupport : isSupport ? _config.P1CyclonicBreakSpreadSupportsCCW : _config.P1CyclonicBreakSpreadDDCCW;

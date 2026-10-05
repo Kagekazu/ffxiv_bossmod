@@ -152,10 +152,10 @@ class P4CrystallizeTimeDragonHead(BossModule module) : BossComponent(module)
                 Heads.Add((actor, actor.Position.X > Module.Center.X ? 1 : -1));
                 break;
             case OID.DragonPuddle:
-                // TODO: this is very arbitrary
-                var mechanic = actor.Position.X < Module.Center.X
-                    ? AssignPuddle(P4CrystallizeTime.Mechanic.FangEruption, P4CrystallizeTime.Mechanic.FangBlizzard)
-                    : AssignPuddle(P4CrystallizeTime.Mechanic.FangDarkness, P4CrystallizeTime.Mechanic.FangWater);
+                var darknessSide = _ct == null || _ct.NorthSlowHourglass.X == 0 ? actor.Position.X > Module.Center.X : (actor.Position.X > Module.Center.X) == (_ct.NorthSlowHourglass.X > 0);
+                var mechanic = darknessSide
+                    ? AssignPuddle(P4CrystallizeTime.Mechanic.FangDarkness, P4CrystallizeTime.Mechanic.FangBlizzard)
+                    : AssignPuddle(P4CrystallizeTime.Mechanic.FangEruption, P4CrystallizeTime.Mechanic.FangWater);
                 _puddles.Add((actor, mechanic));
                 break;
         }
