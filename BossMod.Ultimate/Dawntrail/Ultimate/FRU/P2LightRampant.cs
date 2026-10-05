@@ -358,7 +358,7 @@ class P2LightRampantAITowers(BossModule module) : BossComponent(module)
     }
 }
 
-// movement to stack N/S after towers (and bait last two puddles)
+// movement to stack NE/SW after towers (and bait last two puddles)
 class P2LightRampantAIStackPrepos(BossModule module) : BossComponent(module)
 {
     private readonly P2LuminousHammer? _puddles = module.FindComponent<P2LuminousHammer>();
@@ -367,7 +367,7 @@ class P2LightRampantAIStackPrepos(BossModule module) : BossComponent(module)
     {
         var isPuddleBaiter = _puddles?.ActiveBaitsOn(actor).Any() ?? false;
         var northCamp = isPuddleBaiter ? actor.Position.X < Module.Center.X : actor.Position.Z < Module.Center.Z; // this assumes CW movement for baiter
-        var dest = Module.Center + new WDir(0, northCamp ? -18 : 18);
+        var dest = Module.Center + P2LightRampantAIStackResolve.Radius * ((northCamp ? 180 : 0) - 20).Degrees().ToDirection();
         if (isPuddleBaiter)
         {
             var maxDist = _puddles?.BaitsPerPlayer[slot] == 4 ? 7 : 13;
