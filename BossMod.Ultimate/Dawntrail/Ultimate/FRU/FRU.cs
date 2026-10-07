@@ -1,7 +1,13 @@
 ﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
 class P2QuadrupleSlap(BossModule module) : Components.TankSwap(module, AID.QuadrupleSlapFirst, AID.QuadrupleSlapFirst, AID.QuadrupleSlapSecond, 4.1f, null, true);
-class P3Junction(BossModule module) : Components.CastCounter(module, AID.Junction);
+class P3Junction : Components.RaidwideInstant
+{
+    public P3Junction(BossModule module) : base(module, AID.Junction, 13.3f)
+    {
+        Activation = WorldState.FutureTime(Delay);
+    }
+}
 class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, AID.BlackHalo, new AOEShapeCone(60, 45.Degrees())) // TODO: verify angle
 {
     private WDir _away;
