@@ -1,6 +1,6 @@
 ﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
-class P2AbsoluteZero(BossModule module) : Components.CastCounter(module, AID.AbsoluteZeroAOE);
+class P2AbsoluteZero(BossModule module) : Components.RaidwideCastDelay(module, AID.AbsoluteZero, AID.AbsoluteZeroAOE, 0.9f);
 
 class P2SwellingFrost(BossModule module) : Components.Knockback(module, AID.SwellingFrost, true)
 {
