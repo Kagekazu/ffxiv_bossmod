@@ -65,6 +65,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     // per-frame state shared by all healer jobs, set at the start of Execute
     private bool AutoMit; // Mitigation track allows automatic use
     private float RaidwideIn; // seconds until the next raidwide or shared hit
+    private float FullRaidwideIn; // same, but only hits on everyone (GCD shields are wasted on stacks)
 
     public enum RaiseStrategy
     {
@@ -98,50 +99,22 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         _ => World.Party.FindSlot(Manager.ResolveTargetOverride(strategy.Heal.TrackRaw.Target, strategy.Heal.TrackRaw.TargetParam)?.InstanceID ?? 0)
     };
 
-    private void HealSingleSoon(in Strategy strategy, Action<Actor, float> healFun)
+    private void HealBabysitTarget(in Strategy strategy, bool predicted, Action<Actor, float> healFun)
     {
-        switch (strategy.Heal.Value)
-        {
-            case HealMode.Enabled:
-                if (Health.BestSTHealTargetPredicted is (var a, var b))
-                    healFun(a, b.PredictedHPRatio);
-                break;
-            case HealMode.Babysit:
-                var targetSlot = ResolveHealTarget(strategy);
-
-                if (targetSlot >= 0 && Health.PartyMemberStates[targetSlot].NoHealStatusRemaining < 1.5f && !World.Party[targetSlot]!.IsDead)
-                    healFun(World.Party[targetSlot]!, Health.PartyMemberStates[targetSlot].PredictedHPRatio);
-                break;
-        }
-    }
-
-    private void HealSingleNow(in Strategy strategy, Action<Actor, float> healFun)
-    {
-        switch (strategy.Heal.Value)
-        {
-            case HealMode.Enabled:
-                if (Health.BestSTHealTarget is (var a, var b))
-                    healFun(a, b.PredictedHPRatio);
-                break;
-            case HealMode.Babysit:
-                var targetSlot = ResolveHealTarget(strategy);
-
-                if (targetSlot >= 0 && Health.PartyMemberStates[targetSlot].NoHealStatusRemaining < 1.5f && !World.Party[targetSlot]!.IsDead)
-                    healFun(World.Party[targetSlot]!, Health.PartyMemberStates[targetSlot].CurrentHPRatio);
-                break;
-        }
+        var targetSlot = ResolveHealTarget(strategy);
+        if (targetSlot < 0 || World.Party[targetSlot] is not { IsDead: false } target)
+            return;
+        var st = Health.PartyMemberStates[targetSlot];
+        if (st.NoHealStatusRemaining < 1.5f)
+            healFun(target, predicted ? st.PredictedHPRatio : st.CurrentHPRatio);
     }
 
     private void HealLowest(in Strategy strategy, bool predicted, Action<Actor, float> healFun)
     {
+        if (strategy.Heal.Value == HealMode.Babysit)
+            HealBabysitTarget(strategy, predicted, healFun);
         if (strategy.Heal.Value != HealMode.Enabled)
-        {
-            if (predicted)
-                HealSingleSoon(strategy, healFun);
-            else
-                HealSingleNow(strategy, healFun);
             return;
-        }
 
         var best = -1;
         var bestRatio = float.MaxValue;
@@ -247,6 +220,22 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             tankFun(World.Party[tankSlot]!, Health.PartyMemberStates[tankSlot]!);
     }
 
+    // dungeon trash pulls: no boss module, exactly one tank, holding at least 2 enemies
+    private void RunForTrashPull(in Strategy strategy, Action<Actor, PartyMemberState, int> pullFun)
+    {
+        if (strategy.Heal != HealMode.Enabled || Bossmods.ActiveModule != null)
+            return;
+        RunForTank((tank, tankState) =>
+        {
+            var pulled = Hints.PotentialTargets.Count(e => e.Actor.InCombat && e.Actor.TargetID == tank.InstanceID);
+            if (tank.InCombat && pulled >= 2)
+                pullFun(tank, tankState, pulled);
+        });
+    }
+
+    // big pull and the tank stopped moving: worth placing a ground heal on them
+    private static bool StationaryBigPull(PartyMemberState tankState, int pulled) => pulled >= 3 && tankState.MoveDelta < 0.75f;
+
     private IEnumerable<Actor> LightParty => Health.TrackedMembers.Select(x => x.Item2);
 
     public override void Execute(in Strategy strategy, ref Actor? primaryTarget, float estimatedAnimLockDelay, bool isMoving)
@@ -254,6 +243,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         Health.Update(Hints);
         AutoMit = strategy.Mitigation.Value == MitigationMode.Automatic;
         RaidwideIn = NextDamageIn(-1, raidwideOnly: true);
+        FullRaidwideIn = SecondsUntilNext(StateTimeline.Raidwides(Bossmods.ActiveModule, World, Hints, includeShared: false));
 
         if (strategy.StayNearParty.IsEnabled() && Player.InCombat)
         {
@@ -380,9 +370,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
 
         var bestC2 = BestActionUnlocked(BossMod.WHM.AID.CureII, BossMod.WHM.AID.Cure);
         var bestM2 = BestActionUnlocked(BossMod.WHM.AID.MedicaIII, BossMod.WHM.AID.MedicaII);
-        // StatusDetails includes pending statuses; also skip while the cast itself is still in progress
-        var medicaRegenLeft = StatusDetails(Player, bestM2 == BossMod.WHM.AID.MedicaIII ? BossMod.WHM.SID.MedicaIII : BossMod.WHM.SID.MedicaII, Player.InstanceID).Left;
-        var canApplyMedicaRegen = medicaRegenLeft < 3 && Player.CastInfo?.Action != ActionID.MakeSpell(bestM2);
+        var canApplyMedicaRegen = CanApplyPartyRegen(bestM2 == BossMod.WHM.AID.MedicaIII ? BossMod.WHM.SID.MedicaIII : BossMod.WHM.SID.MedicaII, bestM2);
 
         if (strategy.Heal == HealMode.Enabled && AutoMit)
         {
@@ -446,22 +434,15 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseOGCD(BossMod.WHM.AID.DivineBenison, target, 9);
         });
 
-        // dungeon trash pulls
-        if (strategy.Heal == HealMode.Enabled && Bossmods.ActiveModule == null)
+        RunForTrashPull(strategy, (tank, tankState, pulled) =>
         {
-            RunForTank((tank, tankState) =>
-            {
-                var pulled = Hints.PotentialTargets.Count(e => e.Actor.InCombat && e.Actor.TargetID == tank.InstanceID);
-                if (!tank.InCombat || pulled < 2)
-                    return;
-                if (tank.FindStatus(BossMod.WHM.SID.Regen, Player.InstanceID, World.FutureTime(18)) == null && tank.HPRatio < 0.95f)
-                    UseGCD(BossMod.WHM.AID.Regen, tank);
-                if (tank.FindStatus(BossMod.WHM.SID.DivineBenison, World.FutureTime(15)) == null)
-                    UseOGCD(BossMod.WHM.AID.DivineBenison, tank, 8);
-                if (pulled >= 3 && tankState.MoveDelta < 0.75f)
-                    UseOGCDAt(BossMod.WHM.AID.Asylum, tank.PosRot.XYZ(), 7);
-            });
-        }
+            if (tank.FindStatus(BossMod.WHM.SID.Regen, Player.InstanceID, World.FutureTime(18)) == null && tank.HPRatio < 0.95f)
+                UseGCD(BossMod.WHM.AID.Regen, tank);
+            if (tank.FindStatus(BossMod.WHM.SID.DivineBenison, World.FutureTime(15)) == null)
+                UseOGCD(BossMod.WHM.AID.DivineBenison, tank, 8);
+            if (StationaryBigPull(tankState, pulled))
+                UseOGCDAt(BossMod.WHM.AID.Asylum, tank.PosRot.XYZ(), 7);
+        });
 
         if (PartyLow(strategy, 20, 0.8f))
         {
@@ -501,10 +482,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         var gauge = World.Client.GetGauge<AstrologianGauge>();
         AstrologianCard[] cards = [gauge.Card1, gauge.Card2, gauge.Card3];
 
-        // StatusDetails includes pending statuses; also skip while the cast itself is still in progress
         var heliosHoT = Unlocked(BossMod.AST.AID.HeliosConjunction) ? BossMod.AST.SID.HeliosConjunction : BossMod.AST.SID.AspectedHelios;
-        var castingHelios = Player.CastInfo?.Action is var castAction && (castAction == ActionID.MakeSpell(BossMod.AST.AID.AspectedHelios) || castAction == ActionID.MakeSpell(BossMod.AST.AID.HeliosConjunction));
-        var canApplyHeliosHoT = Unlocked(BossMod.AST.AID.AspectedHelios) && StatusDetails(Player, heliosHoT, Player.InstanceID).Left < 3 && !castingHelios;
+        var canApplyHeliosHoT = Unlocked(BossMod.AST.AID.AspectedHelios) && CanApplyPartyRegen(heliosHoT, BossMod.AST.AID.AspectedHelios, BossMod.AST.AID.HeliosConjunction);
 
         if (strategy.Heal == HealMode.Enabled && AutoMit)
         {
@@ -554,21 +533,14 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseGCD(BossMod.AST.AID.AspectedBenefic, target);
         });
 
-        // dungeon trash pulls
-        if (strategy.Heal == HealMode.Enabled && Bossmods.ActiveModule == null)
+        RunForTrashPull(strategy, (tank, tankState, pulled) =>
         {
-            RunForTank((tank, tankState) =>
-            {
-                var pulled = Hints.PotentialTargets.Count(e => e.Actor.InCombat && e.Actor.TargetID == tank.InstanceID);
-                if (!tank.InCombat || pulled < 2)
-                    return;
-                if (Unlocked(BossMod.AST.AID.AspectedBenefic) && tank.FindStatus(BossMod.AST.SID.AspectedBenefic, Player.InstanceID, World.FutureTime(15)) == null && tank.HPRatio < 0.95f)
-                    UseGCD(BossMod.AST.AID.AspectedBenefic, tank);
-                UseOGCD(BossMod.AST.AID.Exaltation, tank, 8);
-                if (pulled >= 3 && tankState.MoveDelta < 0.75f)
-                    UseOGCDAt(BossMod.AST.AID.EarthlyStar, tank.PosRot.XYZ(), 7);
-            });
-        }
+            if (Unlocked(BossMod.AST.AID.AspectedBenefic) && tank.FindStatus(BossMod.AST.SID.AspectedBenefic, Player.InstanceID, World.FutureTime(15)) == null && tank.HPRatio < 0.95f)
+                UseGCD(BossMod.AST.AID.AspectedBenefic, tank);
+            UseOGCD(BossMod.AST.AID.Exaltation, tank, 8);
+            if (StationaryBigPull(tankState, pulled))
+                UseOGCDAt(BossMod.AST.AID.EarthlyStar, tank.PosRot.XYZ(), 7);
+        });
 
         if (PartyLow(strategy, 20, 0.8f))
         {
@@ -608,7 +580,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseOGCD(BossMod.SCH.AID.FeyIllumination, Player, 19);
             if (RaidwideIn < 5)
                 UseOGCD(BossMod.SCH.AID.Expedient, Player, 18);
-            if (RaidwideIn < GCD + 2.5f && UnshieldedShare(15) >= 0.5f)
+            if (FullRaidwideIn < GCD + 2.5f && UnshieldedShare(15) >= 0.5f)
                 UseGCD(BestActionUnlocked(BossMod.SCH.AID.Concitation, BossMod.SCH.AID.Succor), Player, 5);
 
             foreach (var (tank, busterIn) in TankbustersWithin(5))
@@ -655,21 +627,24 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         if (LightParty.FirstOrDefault(p => p.FindStatus(BossMod.SCH.SID.FeyUnion) != null) is { } unionTarget && PredictedRatio(unionTarget) >= 0.95f)
             UseOGCD(BossMod.SCH.AID.DissolveUnion, Player, 5);
 
-        if (strategy.Heal == HealMode.Enabled)
+        if (strategy.Heal == HealMode.Enabled && useOutOfCombat)
         {
             RunForTank((tank, tankState) =>
             {
-                if (!Player.InCombat && (World.CurrentTime - tankState.LastCombat).TotalSeconds > 1 && useOutOfCombat)
+                if (!Player.InCombat && (World.CurrentTime - tankState.LastCombat).TotalSeconds > 1)
                 {
                     if (NextChargeIn(BossMod.SCH.AID.Excogitation) == 0)
                         UseOGCD(BossMod.SCH.AID.Recitation, Player, 5);
                     UseOGCD(BossMod.SCH.AID.Excogitation, tank);
                 }
-
-                if (tank.InCombat && Bossmods.ActiveModule is null && tankState.MoveDelta < 0.75f)
-                    UseSoil(tank.PosRot.XYZ(), 5);
             });
         }
+
+        RunForTrashPull(strategy, (tank, tankState, pulled) =>
+        {
+            if (StationaryBigPull(tankState, pulled))
+                UseSoil(tank.PosRot.XYZ(), 5);
+        });
 
         if (PetLow(strategy, 30, 0.5f))
         {
@@ -725,6 +700,12 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         return inRange.Count == 0 ? 0 : (float)inRange.Count(p => !HasEukrasianShield(p)) / inRange.Count;
     }
 
+    private bool IsCasting<AID>(params AID[] aids) where AID : Enum => Player.CastInfo?.Action is { } cast && aids.Any(a => cast == ActionID.MakeSpell(a));
+
+    // party regen on ourselves is (nearly) gone, including pending statuses, and we aren't already casting it
+    private bool CanApplyPartyRegen<SID, AID>(SID regen, params AID[] casts) where SID : Enum where AID : Enum
+        => StatusDetails(Player, regen, Player.InstanceID).Left < 3 && !IsCasting(casts);
+
     private bool ReadySoon<AID>(AID aid) where AID : Enum => Unlocked(aid) && NextChargeIn(aid) < 0.6f;
 
     private bool SingledOut(float ratio) => Health.PartyHealth.Count <= 1 || ratio < Health.PartyHealth.AvgCurrent - 0.2f;
@@ -745,14 +726,11 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
 
         if (strategy.Heal == HealMode.Enabled)
         {
-            // shields are for hits on everyone, not stacks
-            var fullRaidwideIn = SecondsUntilNext(StateTimeline.Raidwides(Bossmods.ActiveModule, World, Hints, includeShared: false));
-
             if (AutoMit && RaidwideIn < 8 && gall > 0)
                 UseOGCD(BossMod.SGE.AID.Kerachole, Player, 20);
             if (AutoMit && RaidwideIn < 5 && Health.PartyHealth.AvgCurrent <= 0.8f)
                 UseOGCD(BossMod.SGE.AID.Holos, Player, 15);
-            if (fullRaidwideIn < GCD + 2.5f && UnshieldedShare(15) >= 0.5f)
+            if (FullRaidwideIn < GCD + 2.5f && UnshieldedShare(15) >= 0.5f)
                 UseEukrasian(BossMod.SGE.AID.Prognosis, Player, 5);
 
             foreach (var (tank, busterIn) in TankbustersWithin(5))
@@ -810,6 +788,14 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         {
             if (AutoMit && ratio < 0.5f && target.Role == Role.Tank)
                 UseOGCD(BossMod.SGE.AID.Haima, target, 10);
+        });
+
+        RunForTrashPull(strategy, (tank, tankState, pulled) =>
+        {
+            if (AutoMit && tank.HPRatio < 0.8f && tank.FindStatus(BossMod.SGE.SID.Haima, World.FutureTime(15)) == null)
+                UseOGCD(BossMod.SGE.AID.Haima, tank, 8);
+            if (gall > 0 && Player.Level >= 78 && StationaryBigPull(tankState, pulled) && tank.Position.InCircle(Player.Position, 30))
+                UseOGCD(BossMod.SGE.AID.Kerachole, Player, 7);
         });
 
         if (AutoMit && PartyLow(strategy, 30, 0.8f))
