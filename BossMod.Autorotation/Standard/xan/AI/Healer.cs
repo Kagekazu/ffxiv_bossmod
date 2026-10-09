@@ -1,5 +1,4 @@
 ﻿using FFXIVClientStructs.FFXIV.Client.Game.Gauge;
-using BossMod.Autorotation.kage;
 using static BossMod.Autorotation.TrackPartyHealth;
 
 namespace BossMod.Autorotation.xan;
@@ -58,10 +57,6 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     // per-frame state shared by all healer jobs, set at the start of Execute
     private bool AutoMit; // "Big cooldowns" track allows automatic use
     private float RaidwideIn; // seconds until the next raidwide or shared hit
-
-    // includes raidwides / tankbusters only marked in the module's timeline (FRU)
-    private new IEnumerable<DateTime> Raidwides => StateTimeline.Raidwides(Bossmods.ActiveModule, World, Hints);
-    private new IEnumerable<(Actor, DateTime)> Tankbusters => StateTimeline.Tankbusters(Bossmods.ActiveModule, World, Hints);
 
     public enum RaiseStrategy
     {
@@ -171,8 +166,10 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     private static bool HasAnyStatus(Actor a, uint[] ids) => a.Statuses.Any(s => ids.Contains(s.ID)) || a.PendingStatuses.Any(s => ids.Contains(s.StatusId));
 
     private float NextDamageIn(int slot, bool raidwideOnly = false)
-        => Raidwides.Concat(raidwideOnly ? [] : Tankbusters.Where(t => slot < 0 || World.Party.FindSlot(t.Item1.InstanceID) == slot).Select(t => t.Item2))
-            .Where(t => t >= World.CurrentTime).Select(t => (float)(t - World.CurrentTime).TotalSeconds).DefaultIfEmpty(float.MaxValue).Min();
+        => SecondsUntilNext(Raidwides.Concat(raidwideOnly ? [] : Tankbusters.Where(t => slot < 0 || World.Party.FindSlot(t.Item1.InstanceID) == slot).Select(t => t.Item2)));
+
+    private float SecondsUntilNext(IEnumerable<DateTime> times)
+        => times.Where(t => t >= World.CurrentTime).Select(t => (float)(t - World.CurrentTime).TotalSeconds).DefaultIfEmpty(float.MaxValue).Min();
 
     // heal earlier before predicted damage, later when nothing is coming
     private float ThresholdShift(Actor target, int slot)
@@ -697,9 +694,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
 
         if (strategy.Heal == HealMode.Enabled)
         {
-            var fullRaidwideIn = Hints.PredictedDamage.Where(d => d.Type == AIHints.PredictedDamageType.Raidwide).Select(d => d.Activation)
-                .Concat(StateTimeline.Upcoming(Bossmods.ActiveModule, World).Where(h => h.hint.HasFlag(StateMachine.StateHint.Raidwide)).Select(h => h.at))
-                .Where(t => t >= World.CurrentTime).Select(t => (float)(t - World.CurrentTime).TotalSeconds).DefaultIfEmpty(float.MaxValue).Min();
+            // shields are for hits on everyone, not stacks
+            var fullRaidwideIn = SecondsUntilNext(StateTimeline.Raidwides(Bossmods.ActiveModule, World, Hints, includeShared: false));
 
             if (AutoMit && RaidwideIn < 8 && gall > 0)
                 UseOGCD(BossMod.SGE.AID.Kerachole, Player, 20);
