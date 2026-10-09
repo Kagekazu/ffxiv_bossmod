@@ -416,7 +416,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             var ogcdCovers = Unlocked(BossMod.WHM.AID.Tetragrammaton) && NextChargeIn(BossMod.WHM.AID.Tetragrammaton) < 1;
             if (!SingledOut(ratio))
                 return;
-            if (ratio <= 0.55f && canLily)
+            if (ratio <= 0.55f && canLily && Unlocked(BossMod.WHM.AID.AfflatusSolace))
                 UseGCD(BossMod.WHM.AID.AfflatusSolace, target, 2);
             else if (ratio <= 0.3f || ratio <= 0.5f && !ogcdCovers)
             {
@@ -458,7 +458,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             UseOGCD(BossMod.WHM.AID.Temperance, Player, 13);
         if (AutoMit && PartyLow(strategy, 20, 0.5f) && Player.FindStatus(BossMod.WHM.SID.LiturgyOfTheBell, World.FutureTime(20)) == null)
             UseOGCDAt(BossMod.WHM.AID.LiturgyOfTheBell, Player.PosRot.XYZ(), 12);
-        if (PartyLow(strategy, 20, 0.7f) && canLily)
+        var useRapture = canLily && Unlocked(BossMod.WHM.AID.AfflatusRapture) && PartyLow(strategy, 20, 0.7f);
+        if (useRapture)
             UseGCD(BossMod.WHM.AID.AfflatusRapture, Player, 3);
         if (PartyLow(strategy, 10, 0.55f) && Unlocked(BossMod.WHM.AID.CureIII) && LightParty.Count(p => p.Position.InCircle(Player.Position, 10)) >= 4)
         {
@@ -466,8 +467,9 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseOGCD(BossMod.WHM.AID.ThinAir, Player, 1);
             UseGCD(BossMod.WHM.AID.CureIII, Player, 2);
         }
-        else if (PartyLow(strategy, 15, 0.55f) && !Unlocked(BossMod.WHM.AID.MedicaII))
-            UseGCD(BossMod.WHM.AID.Medica, Player);
+        // no cure III or rapture: refresh the medica regen if possible, otherwise plain medica
+        else if (PartyLow(strategy, 15, 0.55f) && !useRapture)
+            UseGCD(canApplyMedicaRegen ? bestM2 : BossMod.WHM.AID.Medica, Player);
     }
 
     private static readonly (AstrologianCard, BossMod.AST.AID)[] SupportCards = [
@@ -490,7 +492,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             if (RaidwideIn < 5)
                 UseOGCD(BossMod.AST.AID.CollectiveUnconscious, Player, 20);
             if (RaidwideIn < 3)
-                UseOGCD(BossMod.AST.AID.Macrocosmos, Player, 19);
+                UseGCD(BossMod.AST.AID.Macrocosmos, Player, 5);
             if (Player.InCombat)
                 UseOGCDAt(BossMod.AST.AID.EarthlyStar, GetBestPartyCoverage(20), 5);
 
@@ -622,8 +624,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseOGCD(BossMod.SCH.AID.Excogitation, target, 8);
         });
 
-        // stop draining the fairy gauge once the union target is healthy again
-        if (LightParty.FirstOrDefault(p => p.FindStatus(BossMod.SCH.SID.FeyUnion) != null) is { } unionTarget && PredictedRatio(unionTarget) >= 0.95f)
+        // stop draining the fairy gauge once the union target is healthy again; only our own union can be dissolved
+        if (pet != null && LightParty.FirstOrDefault(p => p.FindStatus(BossMod.SCH.SID.FeyUnion, pet.InstanceID) != null || p.FindStatus(BossMod.SCH.SID.FeyUnion, Player.InstanceID) != null) is { } unionTarget && PredictedRatio(unionTarget) >= 0.95f)
             UseOGCD(BossMod.SCH.AID.DissolveUnion, Player, 5);
 
         if (strategy.Heal == HealMode.Enabled && useOutOfCombat)
@@ -632,7 +634,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             {
                 if (!Player.InCombat && (World.CurrentTime - tankState.LastCombat).TotalSeconds > 1)
                 {
-                    if (NextChargeIn(BossMod.SCH.AID.Excogitation) == 0)
+                    // excog's AllowExecute needs aetherflow even under recitation
+                    if (aetherflow && NextChargeIn(BossMod.SCH.AID.Excogitation) == 0)
                         UseOGCD(BossMod.SCH.AID.Recitation, Player, 5);
                     UseOGCD(BossMod.SCH.AID.Excogitation, tank);
                 }
@@ -777,7 +780,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             if (AutoMit && ratio <= 0.4f)
                 UseOGCD(BossMod.SGE.AID.Zoe, Player, 7);
 
-            var ogcdCovers = gall > 0 || AutoMit && tank && (ReadySoon(BossMod.SGE.AID.Taurochole) || ReadySoon(BossMod.SGE.AID.Haima));
+            var ogcdCovers = gall > 0 && Unlocked(BossMod.SGE.AID.Druochole) || AutoMit && tank && (gall > 0 && ReadySoon(BossMod.SGE.AID.Taurochole) || ReadySoon(BossMod.SGE.AID.Haima));
             if (SingledOut(ratio) && (ratio <= 0.3f || ratio <= 0.5f && !ogcdCovers))
             {
                 if (Unlocked(BossMod.SGE.AID.Eukrasia) && !HasGCDShield(target))
