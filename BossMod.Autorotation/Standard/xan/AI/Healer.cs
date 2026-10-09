@@ -316,6 +316,8 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         var thinair = StatusDetails(Player, (uint)BossMod.WHM.SID.ThinAir, Player.InstanceID, 12).Left;
         var swiftcastCD = NextChargeIn(BossMod.WHM.AID.Swiftcast);
         var raise = strategy.Raise.Value;
+        // must outrank every heal GCD, otherwise a heal consumes the swiftcast meant for the raise
+        const int swiftRaisePriority = 10;
 
         void UseThinAir()
         {
@@ -340,7 +342,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                     if (swiftcast > GCD)
                     {
                         UseThinAir();
-                        UseGCD(RaiseAction, tar2);
+                        UseGCD(RaiseAction, tar2, extraPriority: swiftRaisePriority);
                     }
                     else
                         UseGCD(BossMod.WHM.AID.Swiftcast, Player);
@@ -352,7 +354,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                     UseThinAir();
                     UseGCD(BossMod.WHM.AID.Swiftcast, Player, extraPriority: 2);
                     if (swiftcastCD > 8 || !Unlocked(BossMod.WHM.AID.Swiftcast))
-                        UseGCD(RaiseAction, tar3, extraPriority: 1);
+                        UseGCD(RaiseAction, tar3, extraPriority: swiftcast > GCD ? swiftRaisePriority : 1);
                 }
                 break;
         }
