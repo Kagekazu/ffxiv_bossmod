@@ -54,7 +54,6 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     }
 
     private readonly TrackPartyHealth Health = new(manager.WorldState);
-    private DateTime _lastMedicaRegenCast;
 
     // includes raidwides / tankbusters only marked in the module's timeline (FRU)
     private new IEnumerable<DateTime> Raidwides => StateTimeline.Raidwides(Bossmods.ActiveModule, World, Hints);
@@ -162,7 +161,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         (uint)BossMod.SCH.SID.FeyUnion,
         315, // Whispering Dawn
     ];
-    private static bool HasHealOverTime(Actor a) => a.Statuses.Any(s => HealOverTimeStatuses.Contains(s.ID));
+    private static bool HasHealOverTime(Actor a) => a.Statuses.Any(s => HealOverTimeStatuses.Contains(s.ID)) || a.PendingStatuses.Any(s => HealOverTimeStatuses.Contains(s.StatusId));
 
     private float NextDamageIn(int slot, bool raidwideOnly = false)
         => Raidwides.Concat(raidwideOnly ? [] : Tankbusters.Where(t => slot < 0 || World.Party.FindSlot(t.Item1.InstanceID) == slot).Select(t => t.Item2))
@@ -368,10 +367,9 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         var bestC2 = BestActionUnlocked(BossMod.WHM.AID.CureII, BossMod.WHM.AID.Cure);
         var bestM2 = BestActionUnlocked(BossMod.WHM.AID.MedicaIII, BossMod.WHM.AID.MedicaII);
         var medicaRegenLeft = StatusDetails(Player, (uint)(Unlocked(BossMod.WHM.AID.MedicaIII) ? BossMod.WHM.SID.MedicaIII : BossMod.WHM.SID.MedicaII), Player.InstanceID).Left;
-        if (Manager.LastCast.Data is { } lastCast && (lastCast.Action == ActionID.MakeSpell(BossMod.WHM.AID.MedicaII) || lastCast.Action == ActionID.MakeSpell(BossMod.WHM.AID.MedicaIII)))
-            _lastMedicaRegenCast = Manager.LastCast.Time;
-        // The action succeeds before the regen status arrives; don't start another cast in that gap.
-        var canApplyMedicaRegen = medicaRegenLeft < 3 && (World.CurrentTime - _lastMedicaRegenCast).TotalSeconds >= 3;
+        // medicaRegenLeft already includes pending statuses; also skip while a medica cast is still in progress
+        var castingMedica = Player.CastInfo?.Action is var castAction && (castAction == ActionID.MakeSpell(BossMod.WHM.AID.MedicaII) || castAction == ActionID.MakeSpell(BossMod.WHM.AID.MedicaIII));
+        var canApplyMedicaRegen = medicaRegenLeft < 3 && !castingMedica;
         var auto = strategy.Mitigation.Value == MitigationMode.Automatic;
 
         if (strategy.Heal == HealMode.Enabled && auto)
@@ -392,7 +390,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 var busterIn = (float)(at - World.CurrentTime).TotalSeconds;
                 if (busterIn is < 0 or > 4 || tank.IsDead || World.Party.FindSlot(tank.InstanceID) < 0)
                     continue;
-                if (tank.FindStatus(BossMod.WHM.SID.DivineBenison) == null)
+                if (tank.FindStatus(BossMod.WHM.SID.DivineBenison, World.FutureTime(15)) == null)
                     UseOGCD(BossMod.WHM.AID.DivineBenison, tank, 25);
                 UseOGCD(BossMod.WHM.AID.Aquaveil, tank, 24);
             }
@@ -426,17 +424,17 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseGCD(BossMod.WHM.AID.AfflatusSolace, target, 2);
             else if (ratio <= 0.3f || ratio <= 0.5f && !ogcdCovers)
             {
-                if (Player.FindStatus(BossMod.WHM.SID.ThinAir) == null && Player.HPMP.CurMP < 8000)
+                if (Player.FindStatus(BossMod.WHM.SID.ThinAir, World.FutureTime(12)) == null && Player.HPMP.CurMP < 8000)
                     UseOGCD(BossMod.WHM.AID.ThinAir, Player, 1);
                 UseGCD(bestC2, target, 1);
             }
-            else if (ratio <= 0.8f && ratio > 0.3f && tank && target.FindStatus(BossMod.WHM.SID.Regen) == null)
+            else if (ratio <= 0.8f && ratio > 0.3f && tank && target.FindStatus(BossMod.WHM.SID.Regen, World.FutureTime(18)) == null)
                 UseGCD(BossMod.WHM.AID.Regen, target);
         });
 
         HealLowest(strategy, true, (target, ratio) =>
         {
-            if (auto && ratio < 0.75f && target.FindStatus(BossMod.WHM.SID.DivineBenison) == null)
+            if (auto && ratio < 0.75f && target.FindStatus(BossMod.WHM.SID.DivineBenison, World.FutureTime(15)) == null)
                 UseOGCD(BossMod.WHM.AID.DivineBenison, target, 9);
         });
 
@@ -448,9 +446,9 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 var pulled = Hints.PotentialTargets.Count(e => e.Actor.InCombat && e.Actor.TargetID == tank.InstanceID);
                 if (!tank.InCombat || pulled < 2)
                     return;
-                if (tank.FindStatus(BossMod.WHM.SID.Regen, Player.InstanceID) == null && tank.HPRatio < 0.95f)
+                if (tank.FindStatus(BossMod.WHM.SID.Regen, Player.InstanceID, World.FutureTime(18)) == null && tank.HPRatio < 0.95f)
                     UseGCD(BossMod.WHM.AID.Regen, tank);
-                if (tank.FindStatus(BossMod.WHM.SID.DivineBenison) == null)
+                if (tank.FindStatus(BossMod.WHM.SID.DivineBenison, World.FutureTime(15)) == null)
                     UseOGCD(BossMod.WHM.AID.DivineBenison, tank, 8);
                 if (pulled >= 3 && tankState.MoveDelta < 0.75f)
                     Hints.ActionsToExecute.Push(ActionID.MakeSpell(BossMod.WHM.AID.Asylum), null, ActionQueue.Priority.Medium + 7, targetPos: tank.PosRot.XYZ());
@@ -469,13 +467,13 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         }
         if (auto && PartyLow(strategy, 30, 0.55f))
             UseOGCD(BossMod.WHM.AID.Temperance, Player, 13);
-        if (auto && PartyLow(strategy, 20, 0.5f) && Player.FindStatus(BossMod.WHM.SID.LiturgyOfTheBell) == null)
+        if (auto && PartyLow(strategy, 20, 0.5f) && Player.FindStatus(BossMod.WHM.SID.LiturgyOfTheBell, World.FutureTime(20)) == null)
             Hints.ActionsToExecute.Push(ActionID.MakeSpell(BossMod.WHM.AID.LiturgyOfTheBell), null, ActionQueue.Priority.Medium + 12, targetPos: Player.PosRot.XYZ());
         if (PartyLow(strategy, 20, 0.7f) && canLily)
             UseGCD(BossMod.WHM.AID.AfflatusRapture, Player, 3);
         if (PartyLow(strategy, 10, 0.55f) && Unlocked(BossMod.WHM.AID.CureIII) && LightParty.Count(p => p.Position.InCircle(Player.Position, 10)) >= 4)
         {
-            if (Player.FindStatus(BossMod.WHM.SID.ThinAir) == null)
+            if (Player.FindStatus(BossMod.WHM.SID.ThinAir, World.FutureTime(12)) == null)
                 UseOGCD(BossMod.WHM.AID.ThinAir, Player, 1);
             UseGCD(BossMod.WHM.AID.CureIII, Player, 2);
         }
@@ -702,7 +700,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 var busterIn = (float)(at - World.CurrentTime).TotalSeconds;
                 if (busterIn is < 0 or > 5 || tank.IsDead || World.Party.FindSlot(tank.InstanceID) < 0)
                     continue;
-                if (auto && tank.FindStatus(BossMod.SGE.SID.Haima) == null)
+                if (auto && tank.FindStatus(BossMod.SGE.SID.Haima, World.FutureTime(15)) == null)
                     UseOGCD(BossMod.SGE.AID.Haima, tank, 25);
                 if (auto && busterIn < 3 && gall > 0)
                     UseOGCD(BossMod.SGE.AID.Taurochole, tank, 24);
@@ -767,7 +765,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
             UseOGCD(BossMod.SGE.AID.Holos, Player, 17);
         if (auto && PartyLow(strategy, 20, 0.6f))
             UseOGCD(BossMod.SGE.AID.Philosophia, Player, 16);
-        if (auto && PartyLow(strategy, 30, 0.55f) && Player.FindStatus(BossMod.SGE.SID.Panhaima) == null)
+        if (auto && PartyLow(strategy, 30, 0.55f) && Player.FindStatus(BossMod.SGE.SID.Panhaima, World.FutureTime(15)) == null)
             UseOGCD(BossMod.SGE.AID.Panhaima, Player, 15);
         if (gall > 0 && PartyLow(strategy, 15, 0.7f))
             UseOGCD(BossMod.SGE.AID.Ixochole, Player, 14);
