@@ -43,7 +43,9 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         [Track("Allow automatic use of mitigation and big healing cooldowns (Temperance, Kerachole, Collective Unconscious, etc)", InternalName = "Mitigation", Actions = [
             BossMod.WHM.AID.Temperance, BossMod.WHM.AID.PlenaryIndulgence, BossMod.WHM.AID.DivineCaress, BossMod.WHM.AID.Asylum, BossMod.WHM.AID.LiturgyOfTheBell, BossMod.WHM.AID.Aquaveil,
 
-            BossMod.AST.AID.CollectiveUnconscious,
+            BossMod.AST.AID.CollectiveUnconscious, BossMod.AST.AID.Macrocosmos, BossMod.AST.AID.EarthlyStar, BossMod.AST.AID.CelestialOpposition,
+
+            BossMod.SCH.AID.SacredSoil, BossMod.SCH.AID.FeyIllumination, BossMod.SCH.AID.Expedient, BossMod.SCH.AID.SummonSeraph, BossMod.SCH.AID.FeyBlessing,
 
             BossMod.SGE.AID.Kerachole, BossMod.SGE.AID.Holos, BossMod.SGE.AID.Physis, BossMod.SGE.AID.PhysisII, BossMod.SGE.AID.Philosophia, BossMod.SGE.AID.Panhaima, BossMod.SGE.AID.Zoe, BossMod.SGE.AID.Pneuma
         ])]
@@ -247,19 +249,6 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
 
     private IEnumerable<Actor> LightParty => Health.TrackedMembers.Select(x => x.Item2);
 
-    private Vector3? ArenaCenter
-    {
-        get
-        {
-            if (Bossmods.ActiveModule is BossModule m)
-            {
-                var center = m.Arena.Center;
-                return new Vector3(center.X, Player.PosRot.Y, center.Z);
-            }
-            return null;
-        }
-    }
-
     public override void Execute(in Strategy strategy, ref Actor? primaryTarget, float estimatedAnimLockDelay, bool isMoving)
     {
         Health.Update(Hints);
@@ -292,7 +281,7 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 AutoAST(strategy);
                 break;
             case Class.SCH:
-                AutoSCH(strategy, primaryTarget);
+                AutoSCH(strategy);
                 break;
             case Class.SGE:
                 AutoSGE(strategy, primaryTarget);
@@ -380,7 +369,6 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
 
     private Actor? GetRaiseTarget(in Strategy strategy) => RaiseUtil.FindRaiseTargets(World, strategy.RaiseTargets.Value).FirstOrDefault();
 
-    private bool ShouldHealInAreaSoon(in Strategy strategy, WPos pos, float radius, float ratio) => strategy.Heal.Value == HealMode.Enabled && Health.PredictShouldHealInArea(pos, radius, ratio);
     private bool ShouldHealInAreaNow(in Strategy strategy, WPos pos, float radius, float ratio) => strategy.Heal.Value == HealMode.Enabled && Health.ShouldHealInArea(pos, radius, ratio);
 
     private void AutoWHM(in Strategy strategy)
@@ -513,115 +501,159 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         var gauge = World.Client.GetGauge<AstrologianGauge>();
         AstrologianCard[] cards = [gauge.Card1, gauge.Card2, gauge.Card3];
 
-        HealSingleNow(strategy, (target, ratio) =>
-        {
-            if (ratio < 0.3)
-                UseGCD(BossMod.AST.AID.EssentialDignity, target);
-        });
+        // StatusDetails includes pending statuses; also skip while the cast itself is still in progress
+        var heliosHoT = Unlocked(BossMod.AST.AID.HeliosConjunction) ? BossMod.AST.SID.HeliosConjunction : BossMod.AST.SID.AspectedHelios;
+        var castingHelios = Player.CastInfo?.Action is var castAction && (castAction == ActionID.MakeSpell(BossMod.AST.AID.AspectedHelios) || castAction == ActionID.MakeSpell(BossMod.AST.AID.HeliosConjunction));
+        var canApplyHeliosHoT = Unlocked(BossMod.AST.AID.AspectedHelios) && StatusDetails(Player, heliosHoT, Player.InstanceID).Left < 3 && !castingHelios;
 
-        HealSingleSoon(strategy, (target, ratio) =>
+        if (strategy.Heal == HealMode.Enabled && AutoMit)
         {
-            if (ratio < 0.3)
-                UseOGCD(BossMod.AST.AID.CelestialIntersection, target);
+            if (RaidwideIn < 5)
+                UseOGCD(BossMod.AST.AID.CollectiveUnconscious, Player, 20);
+            if (RaidwideIn < 3)
+                UseOGCD(BossMod.AST.AID.Macrocosmos, Player, 19);
+            if (Player.InCombat)
+                UseOGCDAt(BossMod.AST.AID.EarthlyStar, GetBestPartyCoverage(20), 5);
 
-            if (ratio < 0.5)
+            foreach (var (tank, _) in TankbustersWithin(4))
             {
+                UseOGCD(BossMod.AST.AID.Exaltation, tank, 25);
+                UseOGCD(BossMod.AST.AID.CelestialIntersection, tank, 24);
+            }
+        }
+
+        HealLowest(strategy, false, (target, ratio) =>
+        {
+            var tank = target.Role == Role.Tank;
+            var raw = PredictedRatio(target);
+            if (QuietPeriod && raw > 0.55f && raw < 0.85f && !HasHealOverTime(target))
+            {
+                if (MissingWithoutRegen(15, 0.8f) >= 3 && canApplyHeliosHoT)
+                    UseGCD(BossMod.AST.AID.AspectedHelios, Player, 2);
+                else if (raw < 0.7f && Unlocked(BossMod.AST.AID.AspectedBenefic))
+                    UseGCD(BossMod.AST.AID.AspectedBenefic, target, 2);
+                return;
+            }
+            if (ratio <= 0.3f)
+                UseOGCD(BossMod.AST.AID.EssentialDignity, target, 12);
+            if (ratio <= 0.5f)
+                UseOGCD(BossMod.AST.AID.CelestialIntersection, target, 11);
+            if (ratio <= 0.55f)
                 foreach (var (card, action) in SupportCards)
                     if (cards.Contains(card))
-                        UseOGCD(action, target);
+                        UseOGCD(action, target, 10);
+            if (AutoMit && tank && ratio <= 0.6f)
+                UseOGCD(BossMod.AST.AID.Exaltation, target, 9);
 
-                if (NextChargeIn(BossMod.AST.AID.CelestialIntersection) > GCD && NextChargeIn(BossMod.AST.AID.EssentialDignity) > GCD)
-                    UseGCD(BestActionUnlocked(BossMod.AST.AID.BeneficII, BossMod.AST.AID.Benefic), target);
-            }
+            var ogcdCovers = ReadySoon(BossMod.AST.AID.EssentialDignity) || ReadySoon(BossMod.AST.AID.CelestialIntersection);
+            if (!SingledOut(ratio))
+                return;
+            if (ratio <= 0.3f || ratio <= 0.5f && !ogcdCovers)
+                UseGCD(BestActionUnlocked(BossMod.AST.AID.BeneficII, BossMod.AST.AID.Benefic), target, 1);
+            else if (ratio <= 0.8f && tank && Unlocked(BossMod.AST.AID.AspectedBenefic) && target.FindStatus(BossMod.AST.SID.AspectedBenefic, World.FutureTime(15)) == null)
+                UseGCD(BossMod.AST.AID.AspectedBenefic, target);
         });
 
-        if (ShouldHealInAreaNow(strategy, Player.Position, 15, 0.7f))
+        // dungeon trash pulls
+        if (strategy.Heal == HealMode.Enabled && Bossmods.ActiveModule == null)
+        {
+            RunForTank((tank, tankState) =>
+            {
+                var pulled = Hints.PotentialTargets.Count(e => e.Actor.InCombat && e.Actor.TargetID == tank.InstanceID);
+                if (!tank.InCombat || pulled < 2)
+                    return;
+                if (Unlocked(BossMod.AST.AID.AspectedBenefic) && tank.FindStatus(BossMod.AST.SID.AspectedBenefic, Player.InstanceID, World.FutureTime(15)) == null && tank.HPRatio < 0.95f)
+                    UseGCD(BossMod.AST.AID.AspectedBenefic, tank);
+                UseOGCD(BossMod.AST.AID.Exaltation, tank, 8);
+                if (pulled >= 3 && tankState.MoveDelta < 0.75f)
+                    UseOGCDAt(BossMod.AST.AID.EarthlyStar, tank.PosRot.XYZ(), 7);
+            });
+        }
+
+        if (PartyLow(strategy, 20, 0.8f))
         {
             if (gauge.CurrentArcana == AstrologianCard.Lady)
-                UseOGCD(BossMod.AST.AID.LadyOfCrowns, Player);
-
-            UseOGCD(BossMod.AST.AID.CelestialOpposition, Player);
-
-            if (Player.FindStatus(Unlocked(BossMod.AST.AID.HeliosConjunction) ? BossMod.AST.SID.HeliosConjunction : BossMod.AST.SID.AspectedHelios, World.FutureTime(15)) == null)
+                UseOGCD(BossMod.AST.AID.LadyOfCrowns, Player, 16);
+            if (AutoMit)
+                UseOGCD(BossMod.AST.AID.CelestialOpposition, Player, 15);
+            if (canApplyHeliosHoT)
                 UseGCD(BossMod.AST.AID.AspectedHelios, Player);
-
-            if (!Unlocked(BossMod.AST.AID.HeliosConjunction))
-                UseGCD(BossMod.AST.AID.Helios, Player);
         }
-
-        if (strategy.Heal == HealMode.Enabled)
-        {
-            if (Player.InCombat)
-                Hints.ActionsToExecute.Push(ActionID.MakeSpell(BossMod.AST.AID.EarthlyStar), Player, ActionQueue.Priority.Medium, targetPos: Player.PosRot.XYZ());
-
-            if (AutoMit && RaidwideIn < 5)
-                UseOGCD(BossMod.AST.AID.CollectiveUnconscious, Player);
-        }
+        if (PartyLow(strategy, 15, 0.6f) && !canApplyHeliosHoT)
+            UseGCD(BossMod.AST.AID.Helios, Player, 2);
     }
 
-    private void AutoSCH(in Strategy strategy, Actor? primaryTarget)
+    private void AutoSCH(in Strategy strategy)
     {
-        var useOutOfCombat = strategy.OutOfCombat.IsEnabled();
-
-        void UseSoil(Vector3? location = null)
-        {
-            if (World.Client.GetGauge<ScholarGauge>().Aetherflow == 0)
-                return;
-            location ??= ArenaCenter ?? Player.PosRot.XYZ();
-            Hints.ActionsToExecute.Push(ActionID.MakeSpell(BossMod.SCH.AID.SacredSoil), null, ActionQueue.Priority.Medium + 5, targetPos: location.Value);
-        }
-
         var gauge = World.Client.GetGauge<ScholarGauge>();
-
+        var aetherflow = gauge.Aetherflow > 0;
         var pet = World.Client.ActivePet.InstanceID == 0xE0000000 ? null : World.Actors.Find(World.Client.ActivePet.InstanceID);
         var haveSeraph = gauge.SeraphTimer > 0;
-        var haveEos = !haveSeraph;
+        var useOutOfCombat = strategy.OutOfCombat.IsEnabled();
 
-        var aetherflow = gauge.Aetherflow > 0;
-
-        if (aetherflow && ShouldHealInAreaNow(strategy, Player.Position, 15, 0.5f))
-            UseOGCD(BossMod.SCH.AID.Indomitability, Player);
-
-        if (pet != null)
+        void UseSoil(Vector3 location, int prio)
         {
-            if (ShouldHealInAreaSoon(strategy, pet.Position, 30, 0.5f))
-            {
-                if (haveSeraph)
-                    UseOGCD(BossMod.SCH.AID.Consolation, Player);
-                else if (NextChargeIn(BossMod.SCH.AID.SummonSeraph) == 0)
-                    UseOGCD(BossMod.SCH.AID.SummonSeraph, Player);
-            }
-
-            if (ShouldHealInAreaNow(strategy, pet.Position, 20, 0.5f))
-                UseOGCD(BossMod.SCH.AID.FeyBlessing, Player);
-
-            if (ShouldHealInAreaSoon(strategy, pet.Position, 15, 0.8f))
-                UseOGCD(BossMod.SCH.AID.WhisperingDawn, Player);
+            if (aetherflow)
+                UseOGCDAt(BossMod.SCH.AID.SacredSoil, location, prio);
         }
 
-        HealSingleNow(strategy, (target, ratio) =>
+        // fairy abilities are centered on the pet
+        bool PetLow(in Strategy s, float radius, float ratio) => pet != null && ShouldHealInAreaNow(s, pet.Position, radius, ratio + AreaShift());
+
+        if (strategy.Heal == HealMode.Enabled && AutoMit)
         {
-            if (ratio < 0.5)
+            if (RaidwideIn < 5 && NextChargeIn(BossMod.SCH.AID.SacredSoil) == 0)
+                UseSoil(GetBestPartyCoverage(15), 20);
+            if (RaidwideIn < 8 && pet != null)
+                UseOGCD(BossMod.SCH.AID.FeyIllumination, Player, 19);
+            if (RaidwideIn < 5)
+                UseOGCD(BossMod.SCH.AID.Expedient, Player, 18);
+            if (RaidwideIn < GCD + 2.5f && UnshieldedShare(15) >= 0.5f)
+                UseGCD(BestActionUnlocked(BossMod.SCH.AID.Concitation, BossMod.SCH.AID.Succor), Player, 5);
+
+            foreach (var (tank, busterIn) in TankbustersWithin(5))
             {
-                // aetherflow is too valuable
-                var canLustrate = false; // gauge.Aetherflow > 0 && Unlocked(BossMod.SCH.AID.Lustrate);
-                if (canLustrate)
-                    UseOGCD(BossMod.SCH.AID.Lustrate, target);
-                else
-                    UseGCD(BossMod.SCH.AID.Adloquium, target);
+                UseOGCD(BossMod.SCH.AID.Protraction, tank, 25);
+                if (aetherflow)
+                    UseOGCD(BossMod.SCH.AID.Excogitation, tank, 24);
+                if (busterIn < GCD + 2.5f && !HasEukrasianShield(tank))
+                    UseGCD(BossMod.SCH.AID.Adloquium, tank, 4);
             }
+        }
+
+        HealLowest(strategy, false, (target, ratio) =>
+        {
+            var tank = target.Role == Role.Tank;
+            var raw = PredictedRatio(target);
+            if (QuietPeriod && raw > 0.55f && raw < 0.85f && !HasHealOverTime(target) && MissingWithoutRegen(15) >= 3 && pet != null && ReadySoon(BossMod.SCH.AID.WhisperingDawn))
+            {
+                UseOGCD(BossMod.SCH.AID.WhisperingDawn, Player, 12);
+                return;
+            }
+            if (tank && ratio <= 0.6f && aetherflow)
+                UseOGCD(BossMod.SCH.AID.Excogitation, target, 12);
+            if (ratio <= 0.5f && gauge.FairyGauge >= 10 && pet != null && target.FindStatus(BossMod.SCH.SID.FeyUnion, World.FutureTime(1000)) == null)
+                UseOGCD(BossMod.SCH.AID.Aetherpact, target, 11);
+            if (AutoMit && tank && ratio <= 0.5f)
+                UseOGCD(BossMod.SCH.AID.Protraction, target, 10);
+            // aetherflow is too valuable to spend on lustrate unless it's an emergency
+            if (ratio <= 0.25f && aetherflow)
+                UseOGCD(BossMod.SCH.AID.Lustrate, target, 9);
+
+            var ogcdCovers = tank && aetherflow && ReadySoon(BossMod.SCH.AID.Excogitation);
+            if (SingledOut(ratio) && (ratio <= 0.3f || ratio <= 0.5f && !ogcdCovers))
+                UseGCD(BossMod.SCH.AID.Adloquium, target, 3);
         });
 
-        HealSingleSoon(strategy, (target, ratio) =>
+        HealLowest(strategy, true, (target, ratio) =>
         {
-            if (ratio < 0.5)
-            {
-                if (gauge.Aetherflow > 0)
-                    UseOGCD(BossMod.SCH.AID.Excogitation, target);
-                if (gauge.FairyGauge > 0 && target.FindStatus(BossMod.SCH.SID.FeyUnion) == null)
-                    UseOGCD(BossMod.SCH.AID.Aetherpact, target);
-            }
+            if (ratio < 0.5f && aetherflow)
+                UseOGCD(BossMod.SCH.AID.Excogitation, target, 8);
         });
+
+        // stop draining the fairy gauge once the union target is healthy again
+        if (LightParty.FirstOrDefault(p => p.FindStatus(BossMod.SCH.SID.FeyUnion) != null) is { } unionTarget && PredictedRatio(unionTarget) >= 0.95f)
+            UseOGCD(BossMod.SCH.AID.DissolveUnion, Player, 5);
 
         if (strategy.Heal == HealMode.Enabled)
         {
@@ -635,12 +667,25 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 }
 
                 if (tank.InCombat && Bossmods.ActiveModule is null && tankState.MoveDelta < 0.75f)
-                    UseSoil(tank.PosRot.XYZ());
+                    UseSoil(tank.PosRot.XYZ(), 5);
             });
-
-            if (RaidwideIn < 5 && NextChargeIn(BossMod.SCH.AID.SacredSoil) == 0)
-                UseSoil(GetBestPartyCoverage(15));
         }
+
+        if (PetLow(strategy, 30, 0.5f))
+        {
+            if (haveSeraph)
+                UseOGCD(BossMod.SCH.AID.Consolation, Player, 17);
+            else if (AutoMit)
+                UseOGCD(BossMod.SCH.AID.SummonSeraph, Player, 17);
+        }
+        if (AutoMit && PetLow(strategy, 20, 0.6f))
+            UseOGCD(BossMod.SCH.AID.FeyBlessing, Player, 16);
+        if (PetLow(strategy, 15, 0.8f))
+            UseOGCD(BossMod.SCH.AID.WhisperingDawn, Player, 15);
+        if (aetherflow && PartyLow(strategy, 15, 0.6f))
+            UseOGCD(BossMod.SCH.AID.Indomitability, Player, 14);
+        if (PartyLow(strategy, 15, 0.5f) && UnshieldedShare(15) >= 0.5f && !(aetherflow && ReadySoon(BossMod.SCH.AID.Indomitability)))
+            UseGCD(BestActionUnlocked(BossMod.SCH.AID.Concitation, BossMod.SCH.AID.Succor), Player, 1);
     }
 
     // O(n³) :3
@@ -673,6 +718,13 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     private static readonly uint[] EukrasianShields = [(uint)BossMod.SGE.SID.EukrasianDiagnosis, (uint)BossMod.SGE.SID.EukrasianPrognosis, (uint)BossMod.SCH.SID.Galvanize];
     private static bool HasEukrasianShield(Actor a) => HasAnyStatus(a, EukrasianShields);
 
+    // share of living party members in range without a GCD shield (Galvanize / Eukrasian)
+    private float UnshieldedShare(float radius)
+    {
+        var inRange = LightParty.Where(p => !p.IsDead && p.Position.InCircle(Player.Position, radius)).ToList();
+        return inRange.Count == 0 ? 0 : (float)inRange.Count(p => !HasEukrasianShield(p)) / inRange.Count;
+    }
+
     private bool ReadySoon<AID>(AID aid) where AID : Enum => Unlocked(aid) && NextChargeIn(aid) < 0.6f;
 
     private bool SingledOut(float ratio) => Health.PartyHealth.Count <= 1 || ratio < Health.PartyHealth.AvgCurrent - 0.2f;
@@ -689,13 +741,6 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
                 UseGCD(heal, target, prio, instant: true);
             else
                 UseGCD(BossMod.SGE.AID.Eukrasia, Player, prio);
-        }
-
-        var party = LightParty.Where(p => !p.IsDead).ToList();
-        float UnshieldedShare(float radius)
-        {
-            var inRange = party.Where(p => p.Position.InCircle(Player.Position, radius)).ToList();
-            return inRange.Count == 0 ? 0 : (float)inRange.Count(p => !HasEukrasianShield(p)) / inRange.Count;
         }
 
         if (strategy.Heal == HealMode.Enabled)
