@@ -40,7 +40,13 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         public Track<EnabledByDefault> StayNearParty;
         [Track("Allow generic out-of-combat predictive heals on tank (Excogitation, Divine Benison, etc)")]
         public Track<EnabledByDefault> OutOfCombat;
-        [Track("Big cooldowns", InternalName = "Mitigation")]
+        [Track("Allow automatic use of mitigation and big healing cooldowns (Temperance, Kerachole, Collective Unconscious, etc)", InternalName = "Mitigation", Actions = [
+            BossMod.WHM.AID.Temperance, BossMod.WHM.AID.PlenaryIndulgence, BossMod.WHM.AID.DivineCaress, BossMod.WHM.AID.Asylum, BossMod.WHM.AID.LiturgyOfTheBell, BossMod.WHM.AID.Aquaveil,
+
+            BossMod.AST.AID.CollectiveUnconscious,
+
+            BossMod.SGE.AID.Kerachole, BossMod.SGE.AID.Holos, BossMod.SGE.AID.Physis, BossMod.SGE.AID.PhysisII, BossMod.SGE.AID.Philosophia, BossMod.SGE.AID.Panhaima, BossMod.SGE.AID.Zoe, BossMod.SGE.AID.Pneuma
+        ])]
         public Track<MitigationMode> Mitigation;
     }
 
@@ -48,14 +54,14 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
     {
         [Option("Use automatically")]
         Automatic,
-        [Option("Do not use automatically")]
+        [Option("Don't use automatically (leave to plan)")]
         LeaveToPlan
     }
 
     private readonly TrackPartyHealth Health = new(manager.WorldState);
 
     // per-frame state shared by all healer jobs, set at the start of Execute
-    private bool AutoMit; // "Big cooldowns" track allows automatic use
+    private bool AutoMit; // Mitigation track allows automatic use
     private float RaidwideIn; // seconds until the next raidwide or shared hit
 
     public enum RaiseStrategy
