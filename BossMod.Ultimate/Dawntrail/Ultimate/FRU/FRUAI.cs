@@ -70,7 +70,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         };
     }
 
-    private float LeewayOnly() => NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed()).LeewaySeconds;
+    private float LeewayOnly() => NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed(), World.Network.LastRTT, 0).LeewaySeconds;
 
     private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
     {
@@ -100,7 +100,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
 
     private (WPos dest, float leeway) PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
     {
-        var navi = NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed());
+        var navi = NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed(), World.Network.LastRTT, 0);
         var dest = navi.Destination ?? Player.Position;
         if (maxRangeTarget == null)
             return (dest, navi.LeewaySeconds);
