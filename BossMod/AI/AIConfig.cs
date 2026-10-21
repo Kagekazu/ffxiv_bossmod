@@ -36,6 +36,9 @@ public sealed class AIConfig : ConfigNode
     [PropertySlider(0, 1)]
     public float ExtraDodgeTime = 0;
 
+    [PropertyDisplay("Use legacy forbidden zone rasterizer", tooltip: "Debug option: use the pathfinding rasterizer from before the August 2026 rewrite, which checks every grid point instead of skipping by distance. Slower; only meant for comparing AI behaviour.", since: "7.5.7.4")]
+    public bool LegacyRasterizer = false;
+
     // defined here for DtrConfig migration
     public bool ShowDTR = true;
 }
