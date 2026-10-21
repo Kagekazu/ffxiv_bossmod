@@ -46,12 +46,7 @@ public struct NavigationDecision
 
         hints.InitPathfindMap(ctx.Map);
         if (hints.ForbiddenZones.Count > 0)
-        {
-            if (Service.Config.Get<BossMod.AI.AIConfig>().LegacyRasterizer)
-                RasterizeForbiddenZonesOld(ctx.Map, hints.ForbiddenZones, currentTime, ctx.ScratchG, ctx.ScratchD, rtt, spaceCushion);
-            else
-                RasterizeForbiddenZones(ctx.Map, hints.ForbiddenZones, currentTime, ctx.ScratchG, ctx.ScratchD, rtt, spaceCushion);
-        }
+            RasterizeForbiddenZones(ctx.Map, hints.ForbiddenZones, currentTime, ctx.ScratchG, ctx.ScratchD, rtt, spaceCushion);
         if (hints.GoalZones.Count > 0 && hints.GoalZonesEnabled)
             RasterizeGoalZones(ctx.Map, hints.GoalZones, spaceCushion > 0);
         else if (spaceCushion > 0)
@@ -115,14 +110,22 @@ public struct NavigationDecision
         foreach (var (d, g) in zonesFixed)
             RasterizeForbiddenZone(map, d, g, gScratch.AsSpan(), dScratch, cushion);
 
-        // whole grid is blocked, unblock cells with highest gscore so pathfinding produces a reasonable result
+        // blocked cells (including out of bounds and obstacles, which RasterizeForbiddenZone skips) are never destinations
+        // otherwise they can keep the max priority once the cushion lowers every reachable cell, leaving the pathfinder without a reachable goal
         var ipx = map.Width * map.Height;
+        for (var i = 0; i < ipx; i++)
+            if (map.PixelMaxG[i] < float.MaxValue)
+                map.PixelPriority[i] = float.MinValue;
+
+        // whole grid is blocked, unblock cells with highest gscore so pathfinding produces a reasonable result
         var realMaxG = map.PixelMaxG.Take(ipx).Max();
         if (realMaxG < float.MaxValue)
         {
             for (var i = 0; i < ipx; i++)
                 if (map.PixelMaxG[i] == realMaxG)
                 {
+                    // avoid flags were set while this cell was still considered safe, the old rasterizer never had them on rescued cells
+                    map.PixelAvoid[i] = false;
                     map.PixelMaxG[i] = float.MaxValue;
                     map.PixelPriority[i] = 0;
                 }
