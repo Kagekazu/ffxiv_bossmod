@@ -68,28 +68,48 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         };
     }
 
+    // components are only activated/deactivated on state transitions, so look them up once per state
+    private FRU? _cachedModule;
+    private StateMachine.State? _cachedState;
+    private P1Explosion? _explosion;
+    private P2MirrorMirrorReflectedScytheKickBlue? _scytheKickBlue;
+    private P2MirrorMirrorHouseOfLight? _houseOfLight;
+    private P2MirrorMirrorBanish? _banish;
+    private P2SinboundHoly? _sinboundHoly;
+    private P3BlackHalo? _blackHalo;
+    private P2Intermission? _intermission;
+    private P3UltimateRelativity? _relativity;
+
+    private void RefreshComponents(FRU module)
+    {
+        if (_cachedModule == module && _cachedState == module.StateMachine.ActiveState)
+            return;
+        _cachedModule = module;
+        _cachedState = module.StateMachine.ActiveState;
+        _explosion = module.FindComponent<P1Explosion>();
+        _scytheKickBlue = module.FindComponent<P2MirrorMirrorReflectedScytheKickBlue>();
+        _houseOfLight = module.FindComponent<P2MirrorMirrorHouseOfLight>();
+        _banish = module.FindComponent<P2MirrorMirrorBanish>();
+        _sinboundHoly = module.FindComponent<P2SinboundHoly>();
+        _blackHalo = module.FindComponent<P3BlackHalo>();
+        _intermission = module.FindComponent<P2Intermission>();
+        _relativity = module.FindComponent<P3UltimateRelativity>();
+    }
+
     // mechanics where we need to stand on an exact spot, so greeding melee uptime is not allowed
     private bool SuppressMeleeGreed(FRU module, int slot, PartyRolesConfig.Assignment assignment)
     {
         if (Player.FindStatus(SID.ThinIce) != null)
             return true;
-        if (module.FindComponent<P1Explosion>() is { } explosion && explosion.RequiresStrictPosition(slot, assignment))
-            return true;
-        if (module.FindComponent<P2MirrorMirrorReflectedScytheKickBlue>() is { } blue && blue.RequiresStrictPosition(slot))
-            return true;
-        if (module.FindComponent<P2MirrorMirrorHouseOfLight>() is { } light && light.RequiresStrictPosition(assignment))
-            return true;
-        if (module.FindComponent<P2MirrorMirrorBanish>() is { } banish && banish.RequiresStrictPosition(slot, assignment))
-            return true;
-        if (module.FindComponent<P2SinboundHoly>() != null)
-            return true;
-        if (module.FindComponent<P3BlackHalo>() is { Active: true })
-            return true;
-        if (module.FindComponent<P2Intermission>() is { } intermission && intermission.RequiresStrictPosition(assignment))
-            return true;
-        if (module.FindComponent<P3UltimateRelativity>() is { } relativity && relativity.RequiresStrictPosition(slot, Player))
-            return true;
-        return false;
+        RefreshComponents(module);
+        return _explosion?.RequiresStrictPosition(slot, assignment) == true
+            || _scytheKickBlue?.RequiresStrictPosition(slot) == true
+            || _houseOfLight?.RequiresStrictPosition(assignment) == true
+            || _banish?.RequiresStrictPosition(slot, assignment) == true
+            || _sinboundHoly != null
+            || _blackHalo is { Active: true }
+            || _intermission?.RequiresStrictPosition(assignment) == true
+            || _relativity?.RequiresStrictPosition(slot, Player) == true;
     }
 
     private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
