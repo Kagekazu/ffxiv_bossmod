@@ -3,13 +3,11 @@
 class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(module, AID.WingsDarkAndLightExplosion)
 {
     private readonly FRUConfig _config = Service.Config.Get<FRUConfig>();
-    private WDir _southDir;
-
-    public WDir RelSouth => _southDir;
+    public WDir RelSouth { get; private set; }
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (actor.Role == Role.Tank || Towers.Count == 0 || _southDir == default)
+        if (actor.Role == Role.Tank || Towers.Count == 0 || RelSouth == default)
             return;
 
         var group = _config.P5ParadiseRegainedAssignments[assignment];
@@ -27,7 +25,7 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
                 hints.AddForbiddenZone(ShapeDistance.Circle(t.Position, t.Radius), t.Activation);
             if (group is 1 or 2)
             {
-                var south = _southDir.Normalized();
+                var south = RelSouth.Normalized();
                 var side = group == 1 ? south.OrthoR() : south.OrthoL();
                 // dark (closest tether): left/right of the south tower at max melee so OT can sit in the hitbox
                 // light (farthest tether): step in so OT can be farthest
@@ -53,11 +51,11 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
             var group = 0;
             if (Towers.Count == 0)
             {
-                _southDir = pos - Module.Center;
+                RelSouth = pos - Module.Center;
             }
             else
             {
-                var delta = (Angle.FromDirection(pos - Module.Center) - Angle.FromDirection(_southDir)).Normalized();
+                var delta = (Angle.FromDirection(pos - Module.Center) - Angle.FromDirection(RelSouth)).Normalized();
                 group = delta.Rad < 0 ? 1 : 2; // left / right looking from south toward the boss
             }
             var tanks = Raid.WithSlot(true).WhereActor(p => p.Role == Role.Tank).Mask();

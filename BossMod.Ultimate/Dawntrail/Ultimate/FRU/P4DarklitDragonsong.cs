@@ -338,51 +338,33 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
         var farBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT;
         var closeBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.MT : PartyRolesConfig.Assignment.OT;
         var origin = _source.Position;
-        if (NumCasts == 0)
+        if (assignment == farBaiter)
         {
-            if (assignment == farBaiter)
-            {
-                // hug the real wall so a ranged at max range is not still farther than a 19y pin
-                hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
-                var side = actor.Position.X >= Module.Center.X ? 1 : -1;
-                var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
-                hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
-                var farthest = Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Farthest(origin);
-                if (farthest != null)
-                {
-                    var r = farthest.DistanceToPoint(origin);
-                    if (r < (dest - origin).Length() - 0.25f)
-                        hints.AddForbiddenZone(ShapeDistance.Circle(origin, r));
-                }
-            }
-            else
-            {
-                base.AddAIHints(slot, actor, assignment, hints);
-            }
+            var dest = HugWall(actor, hints);
+            // first hit: make sure nobody else ends up farther than us
+            if (NumCasts == 0 && Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Farthest(origin) is { } farthest && farthest.DistanceToPoint(origin) is var r && r < (dest - origin).Length() - 0.25f)
+                hints.AddForbiddenZone(ShapeDistance.Circle(origin, r));
         }
-        else if (assignment == closeBaiter)
+        else if (assignment == closeBaiter && NumCasts > 0)
         {
             hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
-            var closest = Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Closest(origin);
-            if (closest != null)
-            {
-                var r = closest.DistanceToPoint(origin);
-                if (r > 1)
-                    hints.AddForbiddenZone(ShapeDistance.Donut(origin, r, 100));
-            }
-        }
-        else if (assignment == farBaiter)
-        {
-            // stay out for the close hit too
-            hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
-            var side = actor.Position.X >= Module.Center.X ? 1 : -1;
-            var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
-            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+            if (Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Closest(origin) is { } closest && closest.DistanceToPoint(origin) is var r && r > 1)
+                hints.AddForbiddenZone(ShapeDistance.Donut(origin, r, 100));
         }
         else
         {
             base.AddAIHints(slot, actor, assignment, hints);
         }
+    }
+
+    // hug the real wall so a ranged at max range is not still farther than a 19y pin
+    private WPos HugWall(Actor actor, AIHints hints)
+    {
+        hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
+        var side = actor.Position.X >= Module.Center.X ? 1 : -1;
+        var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
+        hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+        return dest;
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)

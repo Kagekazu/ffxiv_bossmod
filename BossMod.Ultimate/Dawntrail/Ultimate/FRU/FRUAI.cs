@@ -47,12 +47,10 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
 
         var assignment = Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId];
 
-        var option = strategy.Option(Track.Movement);
-        var (dest, _) = CalculateDestination(module, primaryTarget, option, assignment);
-        SetForcedMovement(dest, thinIce != null ? 1.5f : 0.1f);
+        SetForcedMovement(CalculateDestination(module, playerSlot, primaryTarget, strategy.Option(Track.Movement), assignment), thinIce != null ? 1.5f : 0.1f);
     }
 
-    private (WPos? dest, float leeway) CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
+    private WPos? CalculateDestination(FRU module, int slot, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment)
     {
         var strat = strategy.As<MovementStrategy>();
         if (!Player.InCombat && strat is MovementStrategy.Pathfind or MovementStrategy.PathfindMeleeGreed)
@@ -61,24 +59,20 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         return strat switch
         {
             MovementStrategy.Pathfind => PathfindPosition(null, assignment),
-            MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment),
-            MovementStrategy.Explicit => (ResolveTargetLocation(strategy.Value), LeewayOnly()),
-            MovementStrategy.ExplicitMelee => (ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget), LeewayOnly()),
-            MovementStrategy.Prepull => (PrepullPosition(module, assignment), float.MaxValue),
-            MovementStrategy.DragToCenter => (DragToCenterPosition(module), float.MaxValue),
-            _ => (null, float.MaxValue)
+            MovementStrategy.PathfindMeleeGreed => PathfindPosition(SuppressMeleeGreed(module, slot, assignment) ? null : ResolveTarget(strategy.Value) ?? primaryTarget, assignment),
+            MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
+            MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
+            MovementStrategy.Prepull => PrepullPosition(module, assignment),
+            MovementStrategy.DragToCenter => DragToCenterPosition(module),
+            _ => null
         };
     }
 
-    private float LeewayOnly() => NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed(), World.Network.LastRTT, 0).LeewaySeconds;
-
-    private bool SuppressMeleeGreed(FRU module, PartyRolesConfig.Assignment assignment)
+    // mechanics where we need to stand on an exact spot, so greeding melee uptime is not allowed
+    private bool SuppressMeleeGreed(FRU module, int slot, PartyRolesConfig.Assignment assignment)
     {
         if (Player.FindStatus(SID.ThinIce) != null)
             return true;
-        if (!module.Raid.TryFindSlot(Player.InstanceID, out var slot))
-            return false;
-
         if (module.FindComponent<P1Explosion>() is { } explosion && explosion.RequiresStrictPosition(slot, assignment))
             return true;
         if (module.FindComponent<P2MirrorMirrorReflectedScytheKickBlue>() is { } blue && blue.RequiresStrictPosition(slot))
@@ -98,12 +92,12 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         return false;
     }
 
-    private (WPos dest, float leeway) PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
+    private WPos PathfindPosition(Actor? maxRangeTarget, PartyRolesConfig.Assignment assignment)
     {
         var navi = NavigationDecision.Build(NavigationContext, World.CurrentTime, Hints, Player.Position, Speed(), World.Network.LastRTT, 0);
         var dest = navi.Destination ?? Player.Position;
         if (maxRangeTarget == null)
-            return (dest, navi.LeewaySeconds);
+            return dest;
 
         const float greedTolerance = 0.15f;
         var isRanged = FRU.StandsRanged(assignment, Player);
@@ -111,7 +105,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         var toDest = dest - maxRangeTarget.Position;
         var range = toDest.Length();
         if (range <= maxRange || navi.LeewaySeconds <= 0)
-            return (dest, navi.LeewaySeconds);
+            return dest;
 
         var dir = range > 0.1f ? toDest / range : Player.Position - maxRangeTarget.Position;
         dir = dir.LengthSq() < 0.01f ? new WDir(0, -1) : dir.Normalized();
@@ -121,9 +115,8 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         var snapGrid = map.WorldToGrid(snap);
         var snapG = map.InBounds(snapGrid.x, snapGrid.y) ? map.PixelMaxG.BoundSafeAt(map.GridToIndex(snapGrid)) : 0;
         var curG = map.PixelMaxG.BoundSafeAt(NavigationContext.ThetaStar.StartNodeIndex);
-        if (snapG >= curG)
-            return (snap, navi.LeewaySeconds);
-        return (Player.DistanceToHitbox(maxRangeTarget) <= maxRange ? Player.Position : dest, navi.LeewaySeconds);
+        // only greed if the max range cell is at least as safe as where we stand
+        return snapG >= curG ? snap : Player.DistanceToHitbox(maxRangeTarget) <= maxRange ? Player.Position : dest;
     }
 
     private WPos ExplicitMeleePosition(WPos ideal, Actor? target) => target != null ? ClosestInMelee(ideal, target) : ideal;

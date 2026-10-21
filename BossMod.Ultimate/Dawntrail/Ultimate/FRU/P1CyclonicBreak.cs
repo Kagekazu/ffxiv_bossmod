@@ -105,19 +105,15 @@ class P1CyclonicBreakAIBait(BossModule module) : BossComponent(module)
         var isRanged = FRU.StandsRanged(assignment, actor);
         // spread: melee maxmelee; ranged stay in for opener (phlegma) until ~2s before protean, then outer
         // pairs: same ring so adjacent support/DD clocks are in stack range
-        float dist;
+        var dist = 7f;
         if (_spreadStack.Spreads.Count > 0)
         {
             var goOut = Module.PrimaryActor.CastInfo is { } ci
-                ? Module.CastFinishAt(ci) <= WorldState.FutureTime(2f)
+                ? Module.CastFinishAt(ci) <= WorldState.FutureTime(2)
                 : _spreadStack.Activation <= WorldState.FutureTime(4.7f);
             if (isRanged && !goOut)
                 return;
-            dist = isRanged ? 14f : 8f;
-        }
-        else
-        {
-            dist = 7f;
+            dist = isRanged ? 14 : 8;
         }
         hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin + dist * dir, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
     }

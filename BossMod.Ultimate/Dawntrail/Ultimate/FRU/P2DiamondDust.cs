@@ -219,17 +219,9 @@ class P2HeavenlyStrike(BossModule module) : Components.Knockback(module, AID.Hea
         yield return new(Module.Center, 12, _activation);
     }
 
+    // don't get knocked into an icicle
     public override bool DestinationUnsafe(int slot, Actor actor, WPos pos)
-    {
-        if (base.DestinationUnsafe(slot, actor, pos))
-            return true;
-        var icicle = Module.FindComponent<P2IcicleImpact>();
-        if (icicle != null)
-            foreach (var aoe in icicle.ActiveAOEs(slot, actor))
-                if (aoe.Check(pos))
-                    return true;
-        return false;
-    }
+        => base.DestinationUnsafe(slot, actor, pos) || Module.FindComponent<P2IcicleImpact>()?.ActiveAOEs(slot, actor).Any(aoe => aoe.Check(pos)) == true;
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
