@@ -292,12 +292,10 @@ class P2SinboundHoly(BossModule module) : Components.UniformStackSpread(module, 
         var preferredDir = GoCCW(actor, master) ? radial.OrthoL() : radial.OrthoR();
         moveQuickly &= NumCasts > 0; // don't start moving while waiting for first cast
 
-        var waitForMaster = false;
         if (master != null)
         {
             if (NumCasts > 0 && Raid.TryFindSlot(master, out var masterSlot))
             {
-                waitForMaster = (master.Position - _initialSpots[masterSlot]).LengthSq() < 1;
                 var masterMovement = preferredDir.Dot(master.Position - _initialSpots[masterSlot]);
                 if (masterMovement < -2)
                     preferredDir = -preferredDir; // swap movement direction to follow healer
@@ -320,11 +318,9 @@ class P2SinboundHoly(BossModule module) : Components.UniformStackSpread(module, 
         hints.AddForbiddenZone(ShapeDistance.Circle(Module.Center, 16), hintTime);
 
         // prefer moving towards safety (CW is arbitrary)
-        if (!waitForMaster)
-        {
-            var planeOffset = moveQuickly ? 2 : -2; // if we're moving quickly, mark our current spot as forbidden
-            hints.AddForbiddenZone(ShapeDistance.HalfPlane(Module.Center + planeOffset * preferredDir, preferredDir), hintTime);
-        }
+        // non-healers get this from the start too: they leave the first puddle together with the healer instead of picking a side on their own
+        var planeOffset = moveQuickly ? 2 : -2; // if we're moving quickly, mark our current spot as forbidden
+        hints.AddForbiddenZone(ShapeDistance.HalfPlane(Module.Center + planeOffset * preferredDir, preferredDir), hintTime);
     }
 
     private bool GoCCW(Actor actor, Actor? master)
