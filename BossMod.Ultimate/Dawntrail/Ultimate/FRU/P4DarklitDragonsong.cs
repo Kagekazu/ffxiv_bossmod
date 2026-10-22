@@ -207,46 +207,7 @@ class P4DarklitDragonsongPathOfLight(BossModule module) : Components.GenericBait
     }
 }
 
-class P4DarklitDragonsongSpiritTaker(BossModule module) : SpiritTaker(module)
-{
-    //private readonly P4DarklitDragonsong? _darklit = module.FindComponent<P4DarklitDragonsong>();
-
-    public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
-    {
-        //if (_darklit != null && _darklit.AssignS.Any() && Spreads.Count > 0 && Spreads[0].Activation > WorldState.FutureTime(1))
-        //{
-        //    // preposition
-        //    hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + PrepositionOffset(_darklit, slot, actor), 1), Spreads[0].Activation);
-        //}
-        //else
-        {
-            // just adjust and dodge...
-            base.AddAIHints(slot, actor, assignment, hints);
-        }
-    }
-
-    // TODO: this is very arbitrary...
-    //private WDir PrepositionOffset(P4DarklitDragonsong darklit, int slot, Actor actor)
-    //{
-    //    if (darklit.TowerSoakers[slot])
-    //    {
-    //        // tower soakers go to fixed spots, skewed not to hit the fragment
-    //        var dir = (darklit.AssignE[slot] ? 1 : -1) * (darklit.AssignS[slot] ? 25 : 135).Degrees();
-    //        return 9 * dir.ToDirection();
-    //    }
-    //    else
-    //    {
-    //        // baiting healer goes far west, tank goes near west, northern dd goes center, southern dd goes near east
-    //        var off = actor.Role switch
-    //        {
-    //            Role.Healer => -12,
-    //            Role.Tank => -6,
-    //            _ => darklit.AssignS[slot] ? 6 : 0
-    //        };
-    //        return new(off, 0);
-    //    }
-    //}
-}
+class P4DarklitDragonsongSpiritTaker(BossModule module) : SpiritTaker(module);
 
 class P4DarklitDragonsongDarkWater(BossModule module) : Components.UniformStackSpread(module, 6, 0, 4, includeDeadTargets: true)
 {
@@ -334,7 +295,6 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
         if (_source == null)
             return;
 
-        // far bait: configured tank; close bait: the other tank (far tank stays out for both hits)
         var farBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT;
         var closeBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.MT : PartyRolesConfig.Assignment.OT;
         var origin = _source.Position;

@@ -33,7 +33,6 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
         }
         else
         {
-            // melee opposite blue, ranged on the blue side
             var distance = _rangedSpots[slot] ? 19 : -11;
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + distance * _blueMirror, 1), DateTime.MaxValue);
         }

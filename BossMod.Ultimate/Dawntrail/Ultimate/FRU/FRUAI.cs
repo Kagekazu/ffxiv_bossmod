@@ -68,7 +68,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         };
     }
 
-    // components are only activated/deactivated on state transitions, so look them up once per state
+    // look up once per state (components only change on transitions)
     private FRU? _cachedModule;
     private StateMachine.State? _cachedState;
     private P1Explosion? _explosion;
@@ -96,7 +96,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
         _relativity = module.FindComponent<P3UltimateRelativity>();
     }
 
-    // mechanics where we need to stand on an exact spot, so greeding melee uptime is not allowed
+    // exact-spot mechanics: don't greed max melee
     private bool SuppressMeleeGreed(FRU module, int slot, PartyRolesConfig.Assignment assignment)
     {
         if (Player.FindStatus(SID.ThinIce) != null)

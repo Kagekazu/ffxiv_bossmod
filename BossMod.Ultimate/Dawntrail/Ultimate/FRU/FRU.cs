@@ -41,7 +41,7 @@ class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, A
             return;
         }
 
-        // both tanks take the cone opposite the party, staying in max melee
+        // both tanks soak opposite the party at max melee
         var dest = Source.Position + (Source.HitboxRadius + 3.25f) * _away;
         if (actor.Role == Role.Tank)
         {
@@ -52,7 +52,7 @@ class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, A
             return;
         }
 
-        // party leaves the final aim now, and also the cone as it currently points
+        // leave final aim early, and the cone as it currently points
         hints.AddForbiddenZone(Shape.Distance(Source.Position, Angle.FromDirection(_away)));
         hints.AddForbiddenZone(Shape.Distance(Source.Position, Angle.FromDirection(Target.Position - Source.Position)));
     }

@@ -22,7 +22,6 @@ class P4AkhMorn(BossModule module) : Components.UniformStackSpread(module, 4, 0,
             return;
         }
 
-        // G1 west, G2 east
         var side = group == 0 ? -1 : 1;
         var dest = Module.Center + new WDir(side * StackOffset, 0);
         var other = Module.Center + new WDir(-side * StackOffset, 0);

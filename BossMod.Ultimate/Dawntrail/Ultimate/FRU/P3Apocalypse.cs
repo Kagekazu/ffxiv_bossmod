@@ -431,7 +431,6 @@ class P3ApocalypseAIWater2(BossModule module) : BossComponent(module)
         if (_apoc?.Starting == null || _water == null)
             return;
 
-        // add apoc aoes until the stack resolves
         var deadline = _water.Stacks.Count > 0 ? _water.Stacks.Max(s => s.Activation) : WorldState.FutureTime(4);
         foreach (var aoe in _apoc.AOEsUntil(deadline))
             hints.AddForbiddenZone(aoe.Shape.Distance(aoe.Origin, aoe.Rotation), aoe.Activation);

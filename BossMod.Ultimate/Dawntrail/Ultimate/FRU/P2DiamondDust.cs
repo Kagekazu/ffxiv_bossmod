@@ -303,7 +303,6 @@ class P2SinboundHoly(BossModule module) : Components.UniformStackSpread(module, 
 
             moveQuickly &= (actor.Position - master.Position).LengthSq() < 25; // don't move too quickly if healer can't catch up
 
-            // non-healers should just stack with whatever closest healer is
             // before first cast, ignore master's movements
             var moveDir = NumCasts > 0 ? master.LastFrameMovement.Normalized() : default;
             var capsule = ShapeDistance.Capsule(master.Position + 2 * moveDir, moveDir, 4, 1.5f);

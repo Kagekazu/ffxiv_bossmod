@@ -272,7 +272,6 @@ class P2LightRampantAIPrepos(BossModule module) : BossComponent(module)
         if (towers != null && towers.Towers.Any(t => !t.ForbiddenSoakers[slot]))
             return; // assigned tower is handled by P2LightRampantAITowers
 
-        // 4 spots on a 90° arc, west to east
         var south = prio >= 4;
         var indexInCamp = prio & 3; // 0 = west
         var dir = south ? (-45 + indexInCamp * 30).Degrees() : (225 - indexInCamp * 30).Degrees();
