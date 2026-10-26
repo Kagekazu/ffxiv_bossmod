@@ -2,9 +2,36 @@
 
 class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(module, AID.WingsDarkAndLightExplosion)
 {
+    private readonly FRUConfig _config = Service.Config.Get<FRUConfig>();
+    public WDir RelSouth { get; private set; }
+
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        // TODO: implement hints for non-tanks here...
+        if (actor.Role == Role.Tank || Towers.Count == 0 || RelSouth == default)
+            return;
+
+        var group = _config.P5ParadiseRegainedAssignments[assignment];
+        var assigned = Towers.FindIndex(t => !t.ForbiddenSoakers[slot]);
+        var canSoak = assigned >= 0 && (group <= 0 || NumCasts > 0);
+        if (canSoak)
+        {
+            ref var t = ref Towers.Ref(assigned);
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(t.Position, 2), t.Activation);
+        }
+        else
+        {
+            foreach (var t in Towers)
+                hints.AddForbiddenZone(ShapeDistance.Circle(t.Position, t.Radius), t.Activation);
+            if (group is 1 or 2)
+            {
+                var south = RelSouth.Normalized();
+                var side = group == 1 ? south.OrthoR() : south.OrthoL();
+                var baits = Module.FindComponent<P5ParadiseRegainedBaits>();
+                var dpsIn = baits is { Active: true, TetherClosest: false };
+                var dest = Module.Center + (dpsIn ? 3 : 7) * south + (dpsIn ? 2 : 4) * side;
+                hints.AddForbiddenZone(ShapeDistance.InvertedCircle(dest, 1), WorldState.CurrentTime);
+            }
+        }
     }
 
     public override void OnMapEffect(byte index, uint state)
@@ -17,8 +44,21 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
                 52 => 120.Degrees(),
                 _ => 0.Degrees()
             };
-            var forbidden = Raid.WithSlot(true).WhereActor(p => p.Role == Role.Tank).Mask(); // TODO: assignments
-            Towers.Add(new(Module.Center + 7 * dir.ToDirection(), 3, 2, 2, forbidden, WorldState.FutureTime(9.5f)));
+            var pos = Module.Center + 7 * dir.ToDirection();
+            var group = 0;
+            if (Towers.Count == 0)
+            {
+                RelSouth = pos - Module.Center;
+            }
+            else
+            {
+                var delta = (Angle.FromDirection(pos - Module.Center) - Angle.FromDirection(RelSouth)).Normalized();
+                group = delta.Rad < 0 ? 1 : 2;
+            }
+            var tanks = Raid.WithSlot(true).WhereActor(p => p.Role == Role.Tank).Mask();
+            var soakers = _config.P5ParadiseRegainedAssignments.BuildGroupMask(group, Raid) & ~tanks;
+            var forbidden = soakers.Any() ? new BitMask(0xFF) & ~soakers : tanks;
+            Towers.Add(new(pos, 3, 2, 2, forbidden, WorldState.FutureTime(9.5f)));
         }
     }
 
@@ -43,12 +83,14 @@ class P5ParadiseRegainedTowers(BossModule module) : Components.GenericTowers(mod
 
 class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(module)
 {
-    private readonly WDir _relSouth = module.FindComponent<P5ParadiseRegainedTowers>() is var towers && towers?.Towers.Count > 0 ? towers.Towers[0].Position - module.Center : default;
+    private readonly WDir _relSouth = module.FindComponent<P5ParadiseRegainedTowers>()?.RelSouth ?? default;
     private Actor? _source;
     private Actor? _firstTarget;
     private AOEShapeCone? _curCleave;
     private DateTime _activation;
-    private bool _tetherClosest;
+    public bool TetherClosest { get; private set; }
+
+    public bool Active => _source != null;
 
     private static readonly AOEShapeCone _shapeCleaveL = new(19, 120.Degrees(), 60.Degrees()); // note: looks wrong with correct range...
     private static readonly AOEShapeCone _shapeCleaveD = new(19, 120.Degrees(), -60.Degrees());
@@ -62,7 +104,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             var cleaveTarget = NumCasts == 0 ? _firstTarget : WorldState.Actors.Find(_source.TargetID);
             if (cleaveTarget != null)
                 CurrentBaits.Add(new(_source, cleaveTarget, _curCleave, _activation));
-            var tetherTarget = _tetherClosest ? Raid.WithoutSlot().Closest(_source.Position) : Raid.WithoutSlot().Farthest(_source.Position);
+            var tetherTarget = TetherClosest ? Raid.WithoutSlot().Closest(_source.Position) : Raid.WithoutSlot().Farthest(_source.Position);
             if (tetherTarget != null)
                 CurrentBaits.Add(new(tetherTarget, tetherTarget, _shapeTether, _activation)); // +0.7s?
         }
@@ -79,7 +121,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             var firstTankShouldBaitTether = NumCasts > 0; // TODO: can a tank bait cleave+tether with invuln?
             var shouldBaitTether = isFirstTank == firstTankShouldBaitTether;
             if (shouldBaitTether && CurrentBaits[1].Target != actor)
-                hints.Add(_tetherClosest ? "Go closer!" : "Go farther!");
+                hints.Add(TetherClosest ? "Go closer!" : "Go farther!");
         }
 
         base.AddHints(slot, actor, hints);
@@ -91,6 +133,15 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
         {
             // just go to the next safespot
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + SafeOffset(slot, actor), 1));
+        }
+        else
+        {
+            foreach (var b in ActiveBaitsNotOn(actor))
+            {
+                if (NumCasts > 0 && b.Shape is AOEShapeCone)
+                    continue;
+                hints.AddForbiddenZone(b.Shape, BaitOrigin(b), b.Rotation, b.Activation);
+            }
         }
     }
 
@@ -118,7 +169,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             _firstTarget = WorldState.Actors.Find(caster.TargetID);
             _curCleave = shape;
             _activation = Module.CastFinishAt(spell, 0.3f);
-            _tetherClosest = closest;
+            TetherClosest = closest;
         }
     }
 
@@ -135,7 +186,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             ++NumCasts;
             _curCleave = nextShape;
             _activation = WorldState.FutureTime(3.7f);
-            _tetherClosest = !_tetherClosest;
+            TetherClosest = !TetherClosest;
         }
     }
 
@@ -159,7 +210,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
             else
             {
                 // bait tether across south
-                return (_tetherClosest ? 2 : 10) * (southDir + 180.Degrees()).ToDirection();
+                return (TetherClosest ? 2 : 10) * (southDir + 180.Degrees()).ToDirection();
             }
         }
         else
@@ -169,7 +220,7 @@ class P5ParadiseRegainedBaits(BossModule module) : Components.GenericBaitAway(mo
                 // bait cleave, so that north is safe
                 return 7 * (southDir - _curCleave.DirectionOffset).ToDirection();
             }
-            else if (_tetherClosest)
+            else if (TetherClosest)
             {
                 // bait tether at south
                 return 2 * southDir.ToDirection();
