@@ -146,8 +146,8 @@ public class FRUConfig() : ConfigNode()
     [PropertyCombo("MT", "OT")]
     public bool P4SomberDanceOTBait;
 
-    [PropertyDisplay("P4/P5 Akh Morn: side assignments", tooltip: "Only used by AI. P4: stack with that group's tank. P5: left/right looking at the boss.")]
-    [GroupDetails(["Left / G1 (MT)", "Right / G2 (OT)"])]
+    [PropertyDisplay("P5 Akh Morn: side assignments", tooltip: "Only used by AI")]
+    [GroupDetails(["Left (looking at boss)", "Right (looking at boss)"])]
     public GroupAssignmentLightParties P5AkhMornAssignments = GroupAssignmentLightParties.DefaultLightParties();
 
     [PropertyDisplay("P5 Paradise Regained: tower pairs (tanks ignored)", tooltip: "Only used by AI. First tower is relative south. Left/right are from that tower looking at the boss.")]
