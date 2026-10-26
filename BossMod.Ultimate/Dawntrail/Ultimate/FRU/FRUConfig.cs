@@ -144,11 +144,17 @@ public class FRUConfig() : ConfigNode()
 
     [PropertyDisplay("P4 Somber Dance: baiter", tooltip: "Only used by AI")]
     [PropertyCombo("MT", "OT")]
-    public bool P4SomberDanceOTBait = true;
+    public bool P4SomberDanceOTBait;
 
-    [PropertyDisplay("P5 Akh Morn: side assignments", tooltip: "Only used by AI")]
-    [GroupDetails(["Left (looking at boss)", "Right (looking at boss)"])]
+    [PropertyDisplay("P4/P5 Akh Morn: side assignments", tooltip: "Only used by AI. P4: stack with that group's tank. P5: left/right looking at the boss.")]
+    [GroupDetails(["Left / G1 (MT)", "Right / G2 (OT)"])]
     public GroupAssignmentLightParties P5AkhMornAssignments = GroupAssignmentLightParties.DefaultLightParties();
+
+    [PropertyDisplay("P5 Paradise Regained: tower pairs (tanks ignored)", tooltip: "Only used by AI. First tower is relative south. Left/right are from that tower looking at the boss.")]
+    [GroupDetails(["First (south)", "Left / G1", "Right / G2"])]
+    [GroupPreset("Healers / G1 left / G2 right", [0, 0, 0, 0, 1, 2, 1, 2])]
+    [GroupPreset("Melee / Ranged / Healers", [0, 0, 2, 2, 0, 0, 1, 1])]
+    public GroupAssignment P5ParadiseRegainedAssignments = new() { Assignments = [0, 0, 0, 0, 1, 2, 1, 2] };
 
     [PropertyDisplay("P5 Polarizing Strikes: bait order", tooltip: "Only used by AI")]
     [GroupDetails(["Left 1", "Left 2", "Left 3", "Left 4", "Right 1", "Right 2", "Right 3", "Right 4"])]

@@ -366,7 +366,13 @@ class P4CrystallizeTimeTidalLight : Components.Exaflare
     }
 }
 
-class P4CrystallizeTimeQuietus(BossModule module) : Components.CastCounter(module, AID.Quietus);
+class P4CrystallizeTimeQuietus : Components.RaidwideInstant
+{
+    public P4CrystallizeTimeQuietus(BossModule module) : base(module, AID.Quietus, 4.1f)
+    {
+        Activation = WorldState.FutureTime(Delay);
+    }
+}
 
 class P4CrystallizeTimeHints(BossModule module) : BossComponent(module)
 {

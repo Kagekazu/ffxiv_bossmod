@@ -1,16 +1,40 @@
 ﻿namespace BossMod.Dawntrail.Ultimate.FRU;
 
+class P1BurnishedGloryRaidwide(BossModule module) : Components.RaidwideCast(module, AID.BurnishedGlory);
+class P2DiamondDustRaidwide(BossModule module) : Components.RaidwideCast(module, AID.DiamondDust);
+class P2LightRampantRaidwide(BossModule module) : Components.RaidwideCast(module, AID.LightRampant);
 class P2QuadrupleSlap(BossModule module) : Components.TankSwap(module, AID.QuadrupleSlapFirst, AID.QuadrupleSlapFirst, AID.QuadrupleSlapSecond, 4.1f, null, true);
-class P3Junction(BossModule module) : Components.CastCounter(module, AID.Junction);
-class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, AID.BlackHalo, new AOEShapeCone(60, 45.Degrees())); // TODO: verify angle
+class P3HellsJudgmentRaidwide(BossModule module) : Components.RaidwideCast(module, AID.HellsJudgment);
+class P3ShockwavePulsarRaidwide(BossModule module) : Components.RaidwideCast(module, AID.ShockwavePulsar);
+class P3UltimateRelativityRaidwide(BossModule module) : Components.RaidwideCast(module, AID.UltimateRelativity);
+class P4CrystallizeTimeRaidwide(BossModule module) : Components.RaidwideCast(module, AID.CrystallizeTimeOracle);
+class P4DarklitDragonsongRaidwide(BossModule module) : Components.RaidwideCast(module, AID.DarklitDragonsongUsurper);
 class P4HallowedWingsL(BossModule module) : Components.StandardAOEs(module, AID.HallowedWingsL, new AOEShapeRect(80, 20));
 class P4HallowedWingsR(BossModule module) : Components.StandardAOEs(module, AID.HallowedWingsR, new AOEShapeRect(80, 20));
+class P5FulgentBladeRaidwide(BossModule module) : Components.RaidwideCast(module, AID.FulgentBlade);
 class P5ParadiseLost(BossModule module) : Components.CastCounter(module, AID.ParadiseLostP5AOE);
+
+class P3Junction : Components.RaidwideInstant
+{
+    public P3Junction(BossModule module) : base(module, AID.Junction, 13.3f)
+    {
+        Activation = WorldState.FutureTime(Delay);
+    }
+}
+
+class P3BlackHalo(BossModule module) : Components.CastSharedTankbuster(module, AID.BlackHalo, new AOEShapeCone(60, 45.Degrees())); // TODO: verify angle
 
 [ModuleInfo(PrimaryActorOID = (uint)OID.BossP1, GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1006, NameID = 9707, PlanLevel = 100)]
 public class FRU(ModuleInit init) : BossModule(init, new(100, 100), new ArenaBoundsCircle(20))
 {
     public static readonly ArenaBoundsSquare PathfindHugBorderBounds = new(20); // this is a hack to allow precise positioning near border by some mechanics, TODO reconsider
+
+    public static bool StandsRanged(PartyRolesConfig.Assignment assignment, Actor actor) => assignment switch
+    {
+        PartyRolesConfig.Assignment.H1 or PartyRolesConfig.Assignment.H2 or PartyRolesConfig.Assignment.R1 or PartyRolesConfig.Assignment.R2 => true,
+        PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.OT or PartyRolesConfig.Assignment.M1 or PartyRolesConfig.Assignment.M2 => false,
+        _ => actor.Role is Role.Healer or Role.Ranged
+    };
 
     public override bool ShouldPrioritizeAllEnemies => true;
 

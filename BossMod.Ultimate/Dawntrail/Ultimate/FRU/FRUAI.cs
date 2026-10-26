@@ -28,22 +28,44 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
 
     public override void Execute(StrategyValues strategy, ref Actor? primaryTarget, float estimatedAnimLockDelay, bool isMoving)
     {
-        if (Bossmods.ActiveModule is FRU module && module.Raid.TryFindSlot(Player.InstanceID, out var playerSlot))
+        if (Player.PendingKnockbacks.Count > 0)
         {
-            SetForcedMovement(CalculateDestination(module, primaryTarget, strategy.Option(Track.Movement), Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId]));
+            Hints.ForcedMovement = default;
+            return;
         }
+
+        var thinIce = Player.FindStatus(SID.ThinIce);
+        if (thinIce != null)
+        {
+            var distance = thinIce.Value.Extra * 0.1f;
+            Hints.AddForbiddenZone(ShapeDistance.Donut(Player.Position, 1, distance - 1), World.FutureTime(2));
+        }
+
+        if (Bossmods.ActiveModule is not FRU module || !module.Raid.TryFindSlot(Player.InstanceID, out var playerSlot))
+            return;
+
+        var assignment = Service.Config.Get<PartyRolesConfig>()[module.Raid.Members[playerSlot].ContentId];
+
+        SetForcedMovement(CalculateDestination(module, primaryTarget, strategy.Option(Track.Movement), assignment, thinIce != null), thinIce != null ? 1.5f : 0.1f);
     }
 
-    private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment) => strategy.As<MovementStrategy>() switch
+    private WPos? CalculateDestination(FRU module, Actor? primaryTarget, StrategyValues.OptionRef strategy, PartyRolesConfig.Assignment assignment, bool onThinIce)
     {
-        MovementStrategy.Pathfind => PathfindPosition(null),
-        MovementStrategy.PathfindMeleeGreed => PathfindPosition(ResolveTarget(strategy.Value) ?? primaryTarget),
-        MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
-        MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
-        MovementStrategy.Prepull => PrepullPosition(module, assignment),
-        MovementStrategy.DragToCenter => DragToCenterPosition(module),
-        _ => null
-    };
+        var strat = strategy.As<MovementStrategy>();
+        if (!Player.InCombat && strat is MovementStrategy.Pathfind or MovementStrategy.PathfindMeleeGreed)
+            strat = MovementStrategy.Prepull;
+
+        return strat switch
+        {
+            MovementStrategy.Pathfind => PathfindPosition(null),
+            MovementStrategy.PathfindMeleeGreed => PathfindPosition(onThinIce ? null : ResolveTarget(strategy.Value) ?? primaryTarget),
+            MovementStrategy.Explicit => ResolveTargetLocation(strategy.Value),
+            MovementStrategy.ExplicitMelee => ExplicitMeleePosition(ResolveTargetLocation(strategy.Value), ResolveTarget(strategy.Value) ?? primaryTarget),
+            MovementStrategy.Prepull => PrepullPosition(module, assignment),
+            MovementStrategy.DragToCenter => DragToCenterPosition(module),
+            _ => null
+        };
+    }
 
     // TODO: account for leeway for casters
     private WPos PathfindPosition(Actor? meleeGreedTarget)
@@ -58,7 +80,7 @@ sealed class FRUAI(RotationModuleManager manager, Actor player) : AIRotationModu
     private WPos PrepullPosition(FRU module, PartyRolesConfig.Assignment assignment)
     {
         var safeRange = 12.5f;
-        var desiredRange = assignment is PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.M1 or PartyRolesConfig.Assignment.M2 ? 5 : 10;
+        var desiredRange = assignment is PartyRolesConfig.Assignment.MT or PartyRolesConfig.Assignment.OT or PartyRolesConfig.Assignment.M1 or PartyRolesConfig.Assignment.M2 ? 5 : 10;
         var dir = _config.P1CyclonicBreakSpots[assignment];
         if (dir < 0)
             dir = 0;

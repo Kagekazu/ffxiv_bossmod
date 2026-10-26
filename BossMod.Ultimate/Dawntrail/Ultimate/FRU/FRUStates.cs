@@ -181,6 +181,8 @@ class FRUStates : StateMachineBuilder
     private void P1BurnishedGlory(uint id, float delay)
     {
         ActorCast(id, _module.BossP1, AID.BurnishedGlory, delay, 5, true, "Raidwide")
+            .ActivateOnEnter<P1BurnishedGloryRaidwide>()
+            .DeactivateOnExit<P1BurnishedGloryRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
     }
 
@@ -236,6 +238,8 @@ class FRUStates : StateMachineBuilder
     {
         ActorCast(id, _module.BossP2, AID.MirrorImage, delay, 3, true);
         ActorCast(id + 0x10, _module.BossP2, AID.DiamondDust, 2.1f, 5, true, "Raidwide")
+            .ActivateOnEnter<P2DiamondDustRaidwide>()
+            .DeactivateOnExit<P2DiamondDustRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorTargetable(id + 0x20, _module.BossP2, false, 3.1f, "Boss disappears")
             .ActivateOnEnter<P2AxeKick>()
@@ -322,6 +326,8 @@ class FRUStates : StateMachineBuilder
     private void P2LightRampant(uint id, float delay)
     {
         ActorCast(id, _module.BossP2, AID.LightRampant, delay, 5, true, "Raidwide (light rampant)")
+            .ActivateOnEnter<P2LightRampantRaidwide>()
+            .DeactivateOnExit<P2LightRampantRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorTargetable(id + 0x10, _module.BossP2, false, 3.1f, "Boss disappears")
             .ActivateOnEnter<P2LightRampant>()
@@ -372,9 +378,9 @@ class FRUStates : StateMachineBuilder
     private void P2AbsoluteZero(uint id, float delay)
     {
         ActorCast(id, _module.BossP2, AID.AbsoluteZero, delay, 10, true, "Intermission start")
+            .ActivateOnEnter<P2AbsoluteZero>()
             .SetHint(StateMachine.StateHint.DowntimeStart);
         ComponentCondition<P2AbsoluteZero>(id + 2, 0.9f, comp => comp.NumCasts > 0, "Raidwide")
-            .ActivateOnEnter<P2AbsoluteZero>()
             .ActivateOnEnter<P2SwellingFrost>()
             .DeactivateOnExit<P2AbsoluteZero>()
             .SetHint(StateMachine.StateHint.Raidwide);
@@ -403,6 +409,8 @@ class FRUStates : StateMachineBuilder
         ActorTargetable(id + 0x10, _module.BossP3, true, 14.2f, "Boss appears")
             .SetHint(StateMachine.StateHint.DowntimeEnd);
         ActorCast(id + 0x20, _module.BossP3, AID.HellsJudgment, 0.1f, 4, true, "1hp")
+            .ActivateOnEnter<P3HellsJudgmentRaidwide>()
+            .DeactivateOnExit<P3HellsJudgmentRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
     }
 
@@ -410,6 +418,8 @@ class FRUStates : StateMachineBuilder
     {
         ActorCast(id, _module.BossP3, AID.UltimateRelativity, delay, 10, true, "Raidwide (relativity)")
             .ActivateOnEnter<P3UltimateRelativity>()
+            .ActivateOnEnter<P3UltimateRelativityRaidwide>()
+            .DeactivateOnExit<P3UltimateRelativityRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorCast(id + 0x10, _module.BossP3, AID.UltimateRelativitySpeed, 4.1f, 5.5f, true)
             .ActivateOnEnter<P3UltimateRelativityDarkFireUnholyDarkness>();
@@ -449,6 +459,8 @@ class FRUStates : StateMachineBuilder
     private State P3ShockwavePulsar(uint id, float delay)
     {
         return ActorCast(id, _module.BossP3, AID.ShockwavePulsar, delay, 5, true, "Raidwide")
+            .ActivateOnEnter<P3ShockwavePulsarRaidwide>()
+            .DeactivateOnExit<P3ShockwavePulsarRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
     }
 
@@ -545,6 +557,8 @@ class FRUStates : StateMachineBuilder
             .ActivateOnEnter<P4DarklitDragonsongBrightHunger>()
             .ActivateOnEnter<P4DarklitDragonsongPathOfLight>()
             .ActivateOnEnter<P4DarklitDragonsongDarkWater>()
+            .ActivateOnEnter<P4DarklitDragonsongRaidwide>()
+            .DeactivateOnExit<P4DarklitDragonsongRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorCast(id + 0x10, _module.BossP4Usurper, AID.PathOfLight, 3.2f, 8);
         ActorCastStart(id + 0x20, _module.BossP4Oracle, AID.SpiritTaker, 0.1f, true, "Towers") // towers resolve right as cast starts
@@ -594,6 +608,8 @@ class FRUStates : StateMachineBuilder
     private void P4CrystallizeTime(uint id, float delay)
     {
         ActorCast(id, _module.BossP4Oracle, AID.CrystallizeTimeOracle, delay, 10, true, "Raidwide (crystallize)")
+            .ActivateOnEnter<P4CrystallizeTimeRaidwide>()
+            .DeactivateOnExit<P4CrystallizeTimeRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ActorTargetable(id + 0x10, _module.BossP4Usurper, false, 3.1f, "Usurper disappears")
             .ActivateOnEnter<P4CrystallizeTime>()
@@ -664,6 +680,8 @@ class FRUStates : StateMachineBuilder
     {
         ActorCast(id, _module.BossP5, AID.FulgentBlade, delay, 6, true, "Raidwide")
             .ActivateOnEnter<P5FulgentBlade>()
+            .ActivateOnEnter<P5FulgentBladeRaidwide>()
+            .DeactivateOnExit<P5FulgentBladeRaidwide>()
             .SetHint(StateMachine.StateHint.Raidwide);
         ComponentCondition<P5FulgentBlade>(id + 0x10, 4.1f, comp => comp.Active);
         ComponentCondition<P5FulgentBlade>(id + 0x20, 7, comp => comp.NumCasts > 0, "Exaline 1");
