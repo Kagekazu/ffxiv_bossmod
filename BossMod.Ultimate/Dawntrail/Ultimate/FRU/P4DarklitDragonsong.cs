@@ -331,16 +331,37 @@ class P4SomberDance(BossModule module) : Components.GenericBaitAway(module, cent
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (assignment == (_config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT))
+        if (_source == null)
+            return;
+
+        var farBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.OT : PartyRolesConfig.Assignment.MT;
+        var closeBaiter = _config.P4SomberDanceOTBait ? PartyRolesConfig.Assignment.MT : PartyRolesConfig.Assignment.OT;
+        var origin = _source.Position;
+        if (assignment == farBaiter)
         {
-            // go far east/west
-            var pos = Module.Center + new WDir(actor.Position.X > Module.Center.X ? 19 : -19, 0);
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(pos, 1), _activation);
+            var dest = HugWall(actor, hints);
+            if (NumCasts == 0 && Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Farthest(origin) is { } farthest && farthest.DistanceToPoint(origin) is var r && r < (dest - origin).Length() - 0.25f)
+                hints.AddForbiddenZone(ShapeDistance.Circle(origin, r));
+        }
+        else if (assignment == closeBaiter && NumCasts > 0)
+        {
+            hints.AddForbiddenZone(ShapeDistance.PrecisePosition(origin, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+            if (Raid.WithoutSlot(excludeNPCs: true).Exclude(actor).Closest(origin) is { } closest && closest.DistanceToPoint(origin) is var r && r > 1)
+                hints.AddForbiddenZone(ShapeDistance.Donut(origin, r, 100));
         }
         else
         {
             base.AddAIHints(slot, actor, assignment, hints);
         }
+    }
+
+    private WPos HugWall(Actor actor, AIHints hints)
+    {
+        hints.PathfindMapBounds = FRU.PathfindHugBorderBounds;
+        var side = actor.Position.X >= Module.Center.X ? 1 : -1;
+        var dest = Module.Center + Module.Bounds.ClampToBounds(new WDir(side * 100, 0));
+        hints.AddForbiddenZone(ShapeDistance.PrecisePosition(dest, new(0, 1), Module.Bounds.MapResolution, actor.Position, 0.1f));
+        return dest;
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
