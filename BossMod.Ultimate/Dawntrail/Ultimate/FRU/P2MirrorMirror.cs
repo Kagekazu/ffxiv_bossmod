@@ -19,7 +19,7 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        if (_aoe != null || _blueMirror == default)
+        if (_aoe != null)
             return;
 
         if (Module.Enemies(OID.BossP2).FirstOrDefault() is var boss && boss != null && boss.TargetID == actor.InstanceID)
@@ -29,7 +29,7 @@ class P2MirrorMirrorReflectedScytheKickBlue : Components.GenericAOEs
             // TODO: verify distance calculation - we want boss to be at least 4m away from center
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center - 16 * _blueMirror, 1), DateTime.MaxValue);
         }
-        else
+        else if (_blueMirror != default)
         {
             var distance = _rangedSpots[slot] ? 19 : -11;
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center + distance * _blueMirror, 1), DateTime.MaxValue);
