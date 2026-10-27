@@ -273,34 +273,28 @@ class TwincastTowers(BossModule module) : Components.GenericTowers(module, AID.M
 
 class SwordOfLight(BossModule module) : Components.GenericAOEs(module, AID.ShiningWave)
 {
-    private readonly List<AOEInstance> _aoes = [];
-    private static readonly AOEShapeCone _shape = new(50, 26.5f.Degrees());
+    private static readonly AOEShapeCone _wave = new(50, 26.5f.Degrees());
+    private const byte _firstIndex = 0x14;
+    private const float _edgeDistance = 20;
+    private readonly List<AOEInstance> _waves = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _waves;
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (state != 0x00020001)
+        var side = index - _firstIndex;
+        if (state != 0x00020001 || side is < 0 or > 3)
             return;
-        var (pos, rot) = index switch
-        {
-            0x14 => (new WPos(100, 80), default),
-            0x15 => (new WPos(120, 100), 270.Degrees()),
-            0x16 => (new WPos(100, 120), 180.Degrees()),
-            0x17 => (new WPos(80, 100), 90.Degrees()),
-            _ => default
-        };
-        if (pos != default)
-            _aoes.Add(new(_shape, pos, rot, WorldState.FutureTime(2.7f)));
+        // N, E, S, W edge, each facing into the arena
+        var facing = (-90 * side).Degrees();
+        _waves.Add(new(_wave, Module.Center - facing.ToDirection() * _edgeDistance, facing, WorldState.FutureTime(2.7f)));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID == AID.ShiningWave)
-        {
-            ++NumCasts;
-            _aoes.RemoveAll(a => a.Activation <= WorldState.CurrentTime);
-        }
+        base.OnEventCast(caster, spell);
+        if (spell.Action == WatchedAction)
+            _waves.RemoveAll(w => w.Activation <= WorldState.CurrentTime);
     }
 }
 
