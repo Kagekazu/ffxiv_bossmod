@@ -273,27 +273,41 @@ class ThermalDivideSides(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-class IceBloomCross(BossModule module) : Components.GenericAOEs(module)
+// every ice shot later blooms into an eight-way star (a straight and a diagonal cross) ~5.2s after it lands;
+// the three oldest stars are shown, each burst clears one cross
+class IceBloomCross(BossModule module) : Components.GenericAOEs(module, AID.IceBloomCross)
 {
-    private static readonly AOEShapeCross _cross = new(40, 2.5f);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeCross Cross = new(40, 2.5f);
+    private const int MaxStars = 3;
+    private readonly List<(WPos Center, DateTime Activation, int CrossesLeft)> _stars = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes.Take(6);
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var s in _stars.Take(MaxStars))
+        {
+            // the diagonal cross goes off first, so it's only drawn while both remain
+            if (s.CrossesLeft > 1)
+                yield return new(Cross, s.Center, 45.Degrees(), s.Activation);
+            yield return new(Cross, s.Center, default, s.Activation);
+        }
+    }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID == AID.IceShoot)
-        {
-            var activation = Module.CastFinishAt(spell, 5.2f);
-            _aoes.Add(new(_cross, spell.LocXZ, 45.Degrees(), activation));
-            _aoes.Add(new(_cross, spell.LocXZ, default, activation));
-        }
+            _stars.Add((spell.LocXZ, Module.CastFinishAt(spell, 5.2f), 2));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if (_aoes.Count > 0 && (AID)spell.Action.ID == AID.IceBloomCross)
-            _aoes.RemoveAt(0);
+        if (spell.Action != WatchedAction || _stars.Count == 0)
+            return;
+        ++NumCasts;
+        var (center, activation, left) = _stars[0];
+        if (--left > 0)
+            _stars[0] = (center, activation, left);
+        else
+            _stars.RemoveAt(0);
     }
 }
 
@@ -312,18 +326,18 @@ class D99ExcaliburStates : StateMachineBuilder
     public D99ExcaliburStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<Steelstrike>()
-            .ActivateOnEnter<ThermalDivideSides>()
-            .ActivateOnEnter<IceBloomCross>()
+            .ActivateOnEnter<SolidSoulsCaliber>()
+            .ActivateOnEnter<EmptySoulsCaliber>()
+            .ActivateOnEnter<VacuumSlash>()
             .ActivateOnEnter<AbyssalSlash1>()
             .ActivateOnEnter<AbyssalSlash2>()
             .ActivateOnEnter<AbyssalSlash3>()
-            .ActivateOnEnter<VacuumSlash>()
-            .ActivateOnEnter<ThermalDivide>()
             .ActivateOnEnter<Exflammeus>()
             .ActivateOnEnter<IceShoot>()
-            .ActivateOnEnter<EmptySoulsCaliber>()
-            .ActivateOnEnter<SolidSoulsCaliber>();
+            .ActivateOnEnter<IceBloomCross>()
+            .ActivateOnEnter<ThermalDivide>()
+            .ActivateOnEnter<ThermalDivideSides>()
+            .ActivateOnEnter<Steelstrike>();
     }
 }
 

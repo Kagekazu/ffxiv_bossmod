@@ -67,28 +67,8 @@ public enum SID : uint
     GiriDirection = 2970, // none->Boss, extra=0x248 (back) / 0x24A (front) / 0x249 (left) / 0x24B (right)
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeRect _inner = new(20, 20, 20);
-    private AOEInstance? _aoe;
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.KenkiRelease && Arena.Bounds.Radius > 21)
-            _aoe = new(_inner, Arena.Center, default, Module.CastFinishAt(spell, 2.1f), Inverted: true);
-    }
-
-    public override void OnMapEffect(byte index, uint state)
-    {
-        if (index == 0x5B && state == 0x00020001)
-        {
-            Arena.Bounds = new ArenaBoundsSquare(20);
-            _aoe = null;
-        }
-    }
-}
+// the opening raidwide turns the rim into a deathwall - stay within the inner 40x40 square
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.KenkiRelease, 2.1f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x5B);
 
 class Giri(BossModule module) : Components.GenericAOEs(module)
 {
@@ -157,54 +137,89 @@ class Giri(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-class SpearmanOrders(BossModule module, OID soldier, AID push, float lenFront, float lenBack, int explosions, int shown) : Components.Exaflare(module, new AOEShapeRect(lenFront, 2, lenBack))
+// soldiers march forward in short hops once they play their order animation; each hop covers 'step' plus a small overlap behind
+abstract class MarchingSoldiers(BossModule module, OID soldier, AID hop, float step, float overlap, int hops, int shown)
+    : Components.Exaflare(module, new AOEShapeRect(step, 2, overlap))
 {
+    private const float FirstHopDelay = 7.8f;
+    private const float HopInterval = 0.6f;
+
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if ((OID)actor.OID == soldier && id == 0x25E9)
-            Lines.Add(new() { Next = actor.Position, Advance = (lenFront + lenBack) * actor.Rotation.ToDirection(), NextExplosion = WorldState.FutureTime(7.8f), TimeToMove = 0.6f, ExplosionsLeft = explosions, MaxShownExplosions = shown });
+        if ((OID)actor.OID != soldier || id != 0x25E9)
+            return;
+        Lines.Add(new()
+        {
+            Next = actor.Position,
+            Advance = actor.Rotation.ToDirection() * (step + overlap),
+            NextExplosion = WorldState.FutureTime(FirstHopDelay),
+            TimeToMove = HopInterval,
+            ExplosionsLeft = hops,
+            MaxShownExplosions = shown,
+        });
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID != push)
+        if ((AID)spell.Action.ID != hop)
             return;
-        var index = Lines.FindIndex(l => l.Next.AlmostEqual(caster.Position, 1));
-        if (index < 0)
+        var line = Lines.MinBy(l => (l.Next - caster.Position).LengthSq());
+        if (line == null || !line.Next.AlmostEqual(caster.Position, 1))
             return;
-        AdvanceLine(Lines[index], caster.Position);
-        if (Lines[index].ExplosionsLeft == 0)
-            Lines.RemoveAt(index);
+        ++NumCasts;
+        AdvanceLine(line, caster.Position);
+        if (line.ExplosionsLeft <= 0)
+            Lines.Remove(line);
     }
 }
-class SpearmanOrdersFast(BossModule module) : SpearmanOrders(module, OID.AshigaruSoheiFast, AID.SpearpointPushFast, 3, 0.474f, 12, 4);
-class SpearmanOrdersSlow(BossModule module) : SpearmanOrders(module, OID.AshigaruSoheiSlow, AID.SpearpointPushSlow, 2, 0.316f, 18, 2);
+class SpearmanOrdersFast(BossModule module) : MarchingSoldiers(module, OID.AshigaruSoheiFast, AID.SpearpointPushFast, 3, 0.474f, 12, 4);
+class SpearmanOrdersSlow(BossModule module) : MarchingSoldiers(module, OID.AshigaruSoheiSlow, AID.SpearpointPushSlow, 2, 0.316f, 18, 2);
 
+// flames that drift forward while alive; drawn as their path for the next 6y, AI keeps a bit of extra lead time
 class Spiritflames(BossModule module) : Components.GenericAOEs(module)
 {
-    private const float Radius = 2.4f;
-    private const float Length = 6;
-    private static readonly AOEShapeRect _shape = new(Length + Radius, Radius, Radius);
-    private readonly List<Actor> _flames = [];
+    private const float FlameRadius = 2.4f;
+    private const float Travel = 6;
+    private static readonly AOEShapeRect Path = new(Travel + FlameRadius, FlameRadius, FlameRadius);
+    private readonly HashSet<ulong> _burning = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _flames.Select(f => new AOEInstance(_shape, f.Position, f.Rotation));
+    private IEnumerable<Actor> Flames()
+    {
+        foreach (var id in _burning)
+            if (WorldState.Actors.Find(id) is { IsDestroyed: false } flame)
+                yield return flame;
+    }
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var f in Flames())
+            yield return new(Path, f.Position, f.Rotation);
+    }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
         if ((OID)actor.OID != OID.Spiritflame)
             return;
-        if (id == 0x1E46)
-            _flames.Add(actor);
-        else if (id == 0x1E3C)
-            _flames.Remove(actor);
+        switch (id)
+        {
+            case 0x1E46:
+                _burning.Add(actor.InstanceID);
+                break;
+            case 0x1E3C:
+                _burning.Remove(actor.InstanceID);
+                break;
+        }
     }
+
+    public override void OnActorDestroyed(Actor actor) => _burning.Remove(actor.InstanceID);
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        foreach (var f in _flames)
+        var soon = WorldState.FutureTime(1.5f);
+        foreach (var f in Flames())
         {
-            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, Length, Radius), WorldState.FutureTime(1.5f));
-            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, Radius));
+            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, FlameRadius));
+            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, Travel, FlameRadius), soon);
         }
     }
 }
@@ -301,10 +316,20 @@ class V022MokoStates : StateMachineBuilder
     public V022MokoStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
+            // always
+            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<KenkiRelease>()
+            .ActivateOnEnter<MoonlessNight>()
+            .ActivateOnEnter<Giri>()
+            .ActivateOnEnter<AzureAuspice>()
+            .ActivateOnEnter<ScarletAuspice>()
+            .ActivateOnEnter<Boundless>()
+            .ActivateOnEnter<IronRain>()
+            .ActivateOnEnter<UpwellFirst>()
+            .ActivateOnEnter<UpwellRest>()
+            // route adds - YamaKagura looks up GhastlyGrasp, so keep it after
             .ActivateOnEnter<Unsheathing>()
             .ActivateOnEnter<VeilSever>()
-            .ActivateOnEnter<ScarletAuspice>()
             .ActivateOnEnter<Clearout>()
             .ActivateOnEnter<Explosion>()
             .ActivateOnEnter<GhastlyGrasp>()
@@ -312,15 +337,7 @@ class V022MokoStates : StateMachineBuilder
             .ActivateOnEnter<Spiritflame>()
             .ActivateOnEnter<Spiritflames>()
             .ActivateOnEnter<SpearmanOrdersFast>()
-            .ActivateOnEnter<SpearmanOrdersSlow>()
-            .ActivateOnEnter<KenkiRelease>()
-            .ActivateOnEnter<MoonlessNight>()
-            .ActivateOnEnter<IronRain>()
-            .ActivateOnEnter<Giri>()
-            .ActivateOnEnter<AzureAuspice>()
-            .ActivateOnEnter<Boundless>()
-            .ActivateOnEnter<UpwellFirst>()
-            .ActivateOnEnter<UpwellRest>();
+            .ActivateOnEnter<SpearmanOrdersSlow>();
     }
 }
 class V022MokoP1States(BossModule module) : V022MokoStates(module);

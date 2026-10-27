@@ -51,27 +51,10 @@ public enum AID : uint
     PuffAndTumbleRest = 30656, // Helper->location, 1.6s cast, range 4 circle
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+// the opening raidwide shrinks the room to the inner 40x40 square; the wall is up ~1.8s after the cast starts
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.TotalWash, 0, new AOEShapeRect(20, 20, 20), true, V012Silkie.DefaultBounds, 0x00020001, 0x04)
 {
-    private static readonly AOEShapeRect _inner = new(20, 20, 20);
-    private AOEInstance? _aoe;
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.TotalWash && Arena.Bounds.Radius > 20)
-            _aoe = new(_inner, Arena.Center, default, WorldState.FutureTime(1.8f), Inverted: true);
-    }
-
-    public override void OnMapEffect(byte index, uint state)
-    {
-        if (index == 0x04 && state == 0x00020001)
-        {
-            Arena.Bounds = V012Silkie.DefaultBounds;
-            _aoe = null;
-        }
-    }
+    protected override DateTime WarningTime(ActorCastInfo spell) => WorldState.FutureTime(1.8f);
 }
 
 class DustBluster(BossModule module) : Components.KnockbackFromCastTarget(module, AID.DustBluster, 16)
@@ -106,29 +89,39 @@ class WashOut(BossModule module) : Components.KnockbackFromCastTarget(module, AI
     }
 }
 
+// each ewer overflows into a stream of puddles marching south ~3.39y every 0.8s; the stream piles up at the south wall (z = -135)
 class EasternEwers(BossModule module) : Components.Exaflare(module, 4)
 {
+    private const float SouthWallZ = -135;
+    private const int Puddles = 14;
+    private static readonly WDir Step = new(0, 3.38788f);
+
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.BrimOver)
-            Lines.Add(new() { Next = caster.Position, Advance = new(0, 3.38788f), NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = 14, MaxShownExplosions = 14 });
+        if ((AID)spell.Action.ID != AID.BrimOver)
+            return;
+        var line = new Line { Next = caster.Position, Advance = Step, NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = Puddles };
+        line.MaxShownExplosions = line.ExplosionsLeft;
+        Lines.Add(line);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID != AID.Rinse)
             return;
-        var index = Lines.FindIndex(l => l.Next.AlmostEqual(caster.Position, 1));
-        if (index < 0)
+        var line = Lines.Find(l => l.Next.AlmostEqual(caster.Position, 1));
+        if (line == null)
             return;
-        var line = Lines[index];
+
+        ++NumCasts;
         AdvanceLine(line, caster.Position);
-        if (line.Next.Z > -135)
-            line.Next = new(line.Next.X, -135);
-        if (line.ExplosionsLeft == 0)
-            Lines.RemoveAt(index);
+        if (line.ExplosionsLeft <= 0)
+            Lines.Remove(line);
+        else if (line.Next.Z > SouthWallZ)
+            line.Next = line.Next with { Z = SouthWallZ };
     }
 
+    // a ewer that gets destroyed stops pouring
     public override void OnActorDestroyed(Actor actor)
     {
         if ((OID)actor.OID == OID.EasternEwer)
@@ -205,21 +198,23 @@ class V012SilkieStates : StateMachineBuilder
     {
         // TODO: route 3 Silken Sweep (broom, Sweep knockback 5) has no component
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
-            .ActivateOnEnter<DustBluster>()
-            .ActivateOnEnter<WashOut>()
-            .ActivateOnEnter<EasternEwers>()
-            .ActivateOnEnter<SilkenPuff>()
-            .ActivateOnEnter<PuffAndTumble>()
-            .ActivateOnEnter<CarpetBeater>()
+            // boss
             .ActivateOnEnter<TotalWash>()
-            .ActivateOnEnter<DustBlusterRaidwide>()
-            .ActivateOnEnter<BracingDuster>()
-            .ActivateOnEnter<ChillingDuster>()
-            .ActivateOnEnter<SlipperySoap>()
-            .ActivateOnEnter<SpotRemover>()
+            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<CarpetBeater>()
             .ActivateOnEnter<SqueakyCleanSmall>()
-            .ActivateOnEnter<SqueakyCleanBig>();
+            .ActivateOnEnter<SqueakyCleanBig>()
+            .ActivateOnEnter<SlipperySoap>()
+            .ActivateOnEnter<ChillingDuster>()
+            .ActivateOnEnter<BracingDuster>()
+            .ActivateOnEnter<SpotRemover>()
+            .ActivateOnEnter<DustBlusterRaidwide>()
+            .ActivateOnEnter<DustBluster>()
+            // routes
+            .ActivateOnEnter<EasternEwers>()
+            .ActivateOnEnter<WashOut>()
+            .ActivateOnEnter<SilkenPuff>()
+            .ActivateOnEnter<PuffAndTumble>();
     }
 }
 

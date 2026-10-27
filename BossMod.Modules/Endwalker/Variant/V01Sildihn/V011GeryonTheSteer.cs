@@ -215,42 +215,56 @@ class SuddenlySewage(BossModule module) : Components.GenericAOEs(module, AID.Sud
     }
 }
 
+// two boulders roll across in opposite directions, 10y per step; map effect 0x0A picks the lane (z) of each:
+// the east one starts at x=15 rolling west, the west one at x=-15 rolling east
 class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOEShapeRect(10, 5))
 {
+    private static readonly WDir HalfLane = new(0, 5); // each 10x10 hit is centered on the helper, the rect starts half a lane north of it
+    private const float StepLength = 10;
+    private const int Steps = 4;
+
     public override void OnMapEffect(byte index, uint state)
     {
         if (index != 0x0A)
             return;
-        var (z1, z2) = state switch
+        (float East, float West)? lanes = state switch
         {
-            0x00020001 => (-15f, 5f),
-            0x00200010 => (-15f, 15f),
-            0x02000100 => (-5f, 5f),
-            0x00800040 => (-5f, 15f),
-            _ => (0f, 0f)
+            0x00020001 => (-15, 5),
+            0x00200010 => (-15, 15),
+            0x02000100 => (-5, 5),
+            0x00800040 => (-5, 15),
+            _ => null
         };
-        if (z1 == 0)
+        if (lanes is not { } l)
             return;
         var activation = WorldState.FutureTime(16.2f);
-        var dir = new WDir(0, 5);
-        AddLine(new(15, z1), -2);
-        AddLine(new(-15, z2), 2);
-
-        void AddLine(WPos origin, float sign) => Lines.Add(new() { Next = origin - dir, Advance = sign * dir.OrthoL(), NextExplosion = activation, TimeToMove = 0.3f, ExplosionsLeft = 4, MaxShownExplosions = 4 });
+        Roll(new(15, l.East), -1, activation);
+        Roll(new(-15, l.West), 1, activation);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID != AID.RollingBoulder)
             return;
-        var pos = caster.Position - new WDir(0, 5);
-        var index = Lines.FindIndex(l => l.Next.AlmostEqual(pos, 1));
-        if (index < 0)
+        var hit = caster.Position - HalfLane;
+        var line = Lines.MinBy(l => (l.Next - hit).LengthSq());
+        if (line == null || !line.Next.AlmostEqual(hit, 1))
             return;
-        AdvanceLine(Lines[index], pos);
-        if (Lines[index].ExplosionsLeft == 0)
-            Lines.RemoveAt(index);
+        ++NumCasts;
+        AdvanceLine(line, hit);
+        if (line.ExplosionsLeft <= 0)
+            Lines.Remove(line);
     }
+
+    private void Roll(WPos start, int directionX, DateTime activation) => Lines.Add(new()
+    {
+        Next = start - HalfLane,
+        Advance = new(StepLength * directionX, 0),
+        NextExplosion = activation,
+        TimeToMove = 0.3f,
+        ExplosionsLeft = Steps,
+        MaxShownExplosions = Steps,
+    });
 }
 
 class Intake(BossModule module) : Components.Knockback(module, stopAtWall: true)
@@ -367,23 +381,26 @@ class V011GeryonTheSteerStates : StateMachineBuilder
     public V011GeryonTheSteerStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ColossalStrike>()
-            .ActivateOnEnter<ExplodingCatapult>()
+            // PowderKegs first: Intake and RunawayRunoff look it up on creation
             .ActivateOnEnter<PowderKegs>()
-            .ActivateOnEnter<ColossalSlam>()
-            .ActivateOnEnter<SubterraneanShudder>()
-            .ActivateOnEnter<ColossalLaunch>()
-            .ActivateOnEnter<ColossalChargeRight>()
-            .ActivateOnEnter<ColossalChargeLeft>()
-            .ActivateOnEnter<Gigantomill>()
-            .ActivateOnEnter<ArenaChanges>()
-            .ActivateOnEnter<ColossalSwing>()
+            // route mechanics
+            .ActivateOnEnter<Intake>()
             .ActivateOnEnter<RunawaySludge>()
+            .ActivateOnEnter<RunawayRunoff>()
             .ActivateOnEnter<SuddenlySewage>()
             .ActivateOnEnter<RollingBoulder>()
-            .ActivateOnEnter<Intake>()
-            .ActivateOnEnter<RunawayRunoff>()
-            .ActivateOnEnter<Shockwave>();
+            .ActivateOnEnter<Shockwave>()
+            // boss
+            .ActivateOnEnter<ArenaChanges>()
+            .ActivateOnEnter<Gigantomill>()
+            .ActivateOnEnter<ColossalChargeLeft>()
+            .ActivateOnEnter<ColossalChargeRight>()
+            .ActivateOnEnter<ColossalSwing>()
+            .ActivateOnEnter<ColossalSlam>()
+            .ActivateOnEnter<ColossalStrike>()
+            .ActivateOnEnter<ColossalLaunch>()
+            .ActivateOnEnter<SubterraneanShudder>()
+            .ActivateOnEnter<ExplodingCatapult>();
     }
 }
 

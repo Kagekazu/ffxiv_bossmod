@@ -38,127 +38,199 @@ public enum IconID : uint
     LoomingNightmare = 197, // player
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeDonut _donut = new(14, 20);
-    private AOEInstance? _aoe;
+class MaliciousMist(BossModule module) : Components.RaidwideCast(module, AID.MaliciousMist);
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+// first mist turns everything outside the inner circle into a deathwall; bounds switch once the map effect plays
+class MistDeathwall(BossModule module) : Components.GenericAOEs(module, AID.MaliciousMist)
+{
+    private static readonly AOEShapeDonut Ring = new(D071HisRoyalHeadnessLeonoggI.DefaultBounds.Radius, D071HisRoyalHeadnessLeonoggI.StartingBounds.Radius + 0.5f);
+    private DateTime _shrinkAt;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        if (_shrinkAt != default)
+            yield return new(Ring, Arena.Center, Activation: _shrinkAt);
+    }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.MaliciousMist && Arena.Bounds.Radius > 14)
-            _aoe = new(_donut, Arena.Center, default, Module.CastFinishAt(spell, 0.9f));
+        if (spell.Action == WatchedAction && Arena.Bounds == D071HisRoyalHeadnessLeonoggI.StartingBounds)
+            _shrinkAt = Module.CastFinishAt(spell, 0.9f);
     }
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (index == 0x00 && state == 0x00020001)
-        {
-            Arena.Bounds = D071HisRoyalHeadnessLeonoggI.DefaultBounds;
-            _aoe = null;
-        }
+        if (index != 0 || state != 0x00020001)
+            return;
+        _shrinkAt = default;
+        Arena.Bounds = D071HisRoyalHeadnessLeonoggI.DefaultBounds;
     }
 }
 
-class LoomingNightmare(BossModule module) : Components.StandardChasingAOEs(module, new AOEShapeCircle(4), AID.LoomingNightmareFirst, AID.LoomingNightmareRest, 3, 1.6f, 5)
+// puddles chase whoever is closest to the first one; every later puddle lands up to 3y towards the target
+class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module)
 {
-    private int _total;
+    private static readonly AOEShapeCircle Puddle = new(4);
+    private const float Step = 3;
+    private const float Interval = 1.6f;
+    private int _chases;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        base.OnCastStarted(caster, spell);
-        if (spell.Action == ActionFirst)
+        if ((AID)spell.Action.ID != AID.LoomingNightmareFirst)
+            return;
+
+        Actor? target = null;
+        var bestDistSq = float.MaxValue;
+        foreach (var p in Raid.WithoutSlot())
         {
-            ++_total;
-            if (_total > 1)
-                MaxCasts = 4;
+            var distSq = (p.Position - caster.Position).LengthSq();
+            if (distSq < bestDistSq && !IsChased(p))
+            {
+                target = p;
+                bestDistSq = distSq;
+            }
         }
+        if (target == null)
+            return;
+
+        // the first two chases seen in logs had 5 puddles, later ones 4
+        var puddles = ++_chases <= 2 ? 5 : 4;
+        Chasers.Add(new(Puddle, target, caster.Position, 0, puddles, Module.CastFinishAt(spell), Interval, Step));
+    }
+
+    public override void OnEventCast(Actor caster, ActorCastEvent spell)
+    {
+        if ((AID)spell.Action.ID is AID.LoomingNightmareFirst or AID.LoomingNightmareRest && Advance(caster.Position, Step, WorldState.CurrentTime) == null)
+            ReportError($"no chaser near {caster.Position}");
+    }
+
+    public override void Update()
+    {
+        Chasers.RemoveAll(c => c.Target.IsDead || c.Target.IsDestroyed);
     }
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        if (ExcludedTargets[slot])
-            hints.AddForbiddenZone(ShapeDistance.Circle(Arena.Center, 13.5f), Chasers.FirstOrDefault()?.NextActivation ?? default);
+
+        // kite along the rim so the trail doesn't cover the middle of the arena
+        foreach (var c in Chasers)
+            if (c.Target == actor)
+                hints.AddForbiddenZone(ShapeDistance.Circle(Arena.Center, 13.5f), c.NextActivation);
+    }
+
+    private bool IsChased(Actor player)
+    {
+        foreach (var c in Chasers)
+            if (c.Target == player)
+                return true;
+        return false;
     }
 }
 
+// noggins telegraph with an animation ~3s before their small circle; the cast itself only gives the final timing
 class FallingNightmare(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle _shape = new(2);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeCircle Shape = new(2);
+    private readonly Dictionary<ulong, AOEInstance> _pending = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _pending.Values;
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if (id == 0x11D1 && (OID)actor.OID == OID.NobleNoggin)
-            _aoes.Add(new(_shape, actor.Position, default, WorldState.FutureTime(3)));
+        if ((OID)actor.OID == OID.NobleNoggin && id == 0x11D1)
+            _pending[actor.InstanceID] = new(Shape, actor.Position, default, WorldState.FutureTime(3));
+    }
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if (IsNightmare(spell.Action))
+            _pending[caster.InstanceID] = new(Shape, caster.Position, default, Module.CastFinishAt(spell));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if (_aoes.Count > 0 && (AID)spell.Action.ID is AID.FallingNightmare1 or AID.FallingNightmare2)
-            _aoes.RemoveAt(0);
+        if (IsNightmare(spell.Action))
+        {
+            ++NumCasts;
+            _pending.Remove(caster.InstanceID);
+        }
     }
+
+    public override void OnActorDestroyed(Actor actor) => _pending.Remove(actor.InstanceID);
+
+    private static bool IsNightmare(ActionID action) => (AID)action.ID is AID.FallingNightmare1 or AID.FallingNightmare2;
 }
 
+// dolls dash forward in short hops once they start charging, until they play their stop animation
 class SpiritedCharge(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect _shape = new(6, 1);
-    private readonly List<Actor> _charges = [];
+    private static readonly AOEShapeRect Path = new(6, 1);
+    private readonly HashSet<ulong> _charging = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _charges.Select(c => new AOEInstance(_shape, c.Position, c.Rotation));
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var id in _charging)
+            if (WorldState.Actors.Find(id) is { IsDestroyed: false } doll)
+                yield return new(Path, doll.Position, doll.Rotation);
+    }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID == AID.SpiritedChargeStart)
-            _charges.Add(caster);
+            _charging.Add(caster.InstanceID);
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
         if (id == 0x1E3C)
-            _charges.Remove(actor);
+            _charging.Remove(actor.InstanceID);
     }
+
+    public override void OnActorDestroyed(Actor actor) => _charging.Remove(actor.InstanceID);
 }
 
+// five explosions per line, 4y apart
 class EvilScheme(BossModule module) : Components.Exaflare(module, 4)
 {
+    private const float Spacing = 4;
+
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.EvilSchemeFirst)
-            Lines.Add(new()
-            {
-                Next = caster.Position,
-                Advance = 4 * spell.Rotation.ToDirection(),
-                NextExplosion = Module.CastFinishAt(spell, 1.6f),
-                TimeToMove = 1.5f,
-                ExplosionsLeft = 5,
-                MaxShownExplosions = 5,
-            });
+        if ((AID)spell.Action.ID != AID.EvilSchemeFirst)
+            return;
+        var line = new Line
+        {
+            Next = caster.Position,
+            Advance = spell.Rotation.ToDirection() * Spacing,
+            NextExplosion = Module.CastFinishAt(spell, 1.6f),
+            TimeToMove = 1.5f,
+            ExplosionsLeft = 5,
+        };
+        line.MaxShownExplosions = line.ExplosionsLeft;
+        Lines.Add(line);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is not (AID.EvilSchemeFirst or AID.EvilSchemeRest))
+        if ((AID)spell.Action.ID is not AID.EvilSchemeFirst and not AID.EvilSchemeRest)
             return;
-        var pos = caster.Position;
-        for (var i = 0; i < Lines.Count; ++i)
+
+        ++NumCasts;
+        var line = Lines.MinBy(l => (l.Next - caster.Position).LengthSq());
+        if (line == null || !line.Next.AlmostEqual(caster.Position, 1))
         {
-            if (Lines[i].Next.AlmostEqual(pos, 1))
-            {
-                AdvanceLine(Lines[i], pos);
-                if (Lines[i].ExplosionsLeft == 0)
-                    Lines.RemoveAt(i);
-                break;
-            }
+            ReportError($"unexpected explosion at {caster.Position}");
+            return;
         }
+
+        AdvanceLine(line, caster.Position);
+        if (line.ExplosionsLeft <= 0)
+            Lines.Remove(line);
     }
 }
 
-class MaliciousMist(BossModule module) : Components.RaidwideCast(module, AID.MaliciousMist);
 class Scream(BossModule module) : Components.StandardAOEs(module, AID.Scream, new AOEShapeCone(20, 30.Degrees()), maxCasts: 4);
 
 class D071HisRoyalHeadnessLeonoggIStates : StateMachineBuilder
@@ -167,13 +239,13 @@ class D071HisRoyalHeadnessLeonoggIStates : StateMachineBuilder
     {
         // TODO: Morbid Fascination and Scream never seen (two clears)
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<MaliciousMist>()
-            .ActivateOnEnter<LoomingNightmare>()
-            .ActivateOnEnter<EvilScheme>()
-            .ActivateOnEnter<FallingNightmare>()
+            .ActivateOnEnter<MistDeathwall>()
+            .ActivateOnEnter<Scream>()
             .ActivateOnEnter<SpiritedCharge>()
-            .ActivateOnEnter<Scream>();
+            .ActivateOnEnter<FallingNightmare>()
+            .ActivateOnEnter<EvilScheme>()
+            .ActivateOnEnter<LoomingNightmare>();
     }
 }
 

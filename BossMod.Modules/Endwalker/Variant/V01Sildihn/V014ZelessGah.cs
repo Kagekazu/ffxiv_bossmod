@@ -45,28 +45,8 @@ public enum SID : uint
     MechanicStatus = 2397, // none->InfernBrand1/InfernBrand2, extra=0x1CA (knockback) / 0x1CB (pull) / 0x1C1 + 0x1F3 (laser wall)
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeRect _inner = new(20, 15, 20);
-    private AOEInstance? _aoe;
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.ShowOfStrength && Arena.Bounds.Radius > 20)
-            _aoe = new(_inner, Arena.Center, default, Module.CastFinishAt(spell, 0.8f), Inverted: true);
-    }
-
-    public override void OnMapEffect(byte index, uint state)
-    {
-        if (index == 0x14 && state == 0x00080004)
-        {
-            Arena.Bounds = V014ZelessGah.DefaultBounds;
-            _aoe = null;
-        }
-    }
-}
+// the opening raidwide shrinks the room to the inner 30x40 rectangle
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.ShowOfStrength, 0.8f, new AOEShapeRect(20, 15, 20), true, V014ZelessGah.DefaultBounds, 0x00080004, 0x14);
 
 class ArcaneFont(BossModule module) : Components.GenericAOEs(module, AID.BlazingBenifice)
 {
@@ -273,93 +253,156 @@ class BallOfFire(BossModule module) : Components.GenericAOEs(module, AID.Burn)
     }
 }
 
+// the incense burners' mechanic is picked by the extra value of the status they receive
+static class BrandMechanic
+{
+    public const ushort LaserWall = 0x1C1;
+    public const ushort LaserWallEnd = 0x1F3;
+    public const ushort Knockback = 0x1CA;
+    public const ushort Pull = 0x1CB;
+
+    public static bool Is(in ActorStatus status, ushort mechanic) => (SID)status.ID == SID.MechanicStatus && status.Extra == mechanic;
+}
+
+// a brand marked for the laser wall fires a thin line along its facing ~7.7s later; all walls drop together
 class TrespassersPyre(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect _rect = new(100, 1);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeRect Wall = new(100, 1);
+    private readonly Dictionary<ulong, (WPos Origin, Angle Direction)> _walls = [];
+    private DateTime _activation;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var w in _walls.Values)
+            yield return new(Wall, w.Origin, w.Direction, _activation);
+    }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
-        if ((SID)status.ID == SID.MechanicStatus && status.Extra == 0x1C1)
-            _aoes.Add(new(_rect, actor.Position, actor.Rotation, WorldState.FutureTime(7.7f)));
+        if (!BrandMechanic.Is(status, BrandMechanic.LaserWall))
+            return;
+        _walls[actor.InstanceID] = (actor.Position, actor.Rotation);
+        _activation = WorldState.FutureTime(7.7f);
     }
 
     public override void OnStatusLose(Actor actor, in ActorStatus status)
     {
-        if ((SID)status.ID == SID.MechanicStatus && status.Extra == 0x1F3)
-            _aoes.Clear();
+        if (BrandMechanic.Is(status, BrandMechanic.LaserWallEnd))
+            _walls.Clear();
     }
 }
 
-class InfernGale(BossModule module) : Components.Knockback(module)
+// knockback 20 away from the marked brand
+class InfernGale(BossModule module) : Components.Knockback(module, AID.InfernGale)
 {
-    private Source? _source;
+    private WPos _origin;
+    private DateTime _activation;
 
-    public override IEnumerable<Source> Sources(int slot, Actor actor) => Utils.ZeroOrOne(_source);
+    public override IEnumerable<Source> Sources(int slot, Actor actor)
+    {
+        if (_activation != default)
+            yield return new(_origin, 20, _activation);
+    }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
         base.OnStatusGain(actor, status);
-        if ((SID)status.ID == SID.MechanicStatus && status.Extra == 0x1CA)
-            _source = new(actor.Position, 20, WorldState.FutureTime(5.6f));
+        if (BrandMechanic.Is(status, BrandMechanic.Knockback))
+        {
+            _origin = actor.Position;
+            _activation = WorldState.FutureTime(5.6f);
+        }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID == AID.InfernGale)
-            _source = null;
+        base.OnEventCast(caster, spell);
+        if (spell.Action == WatchedAction)
+            _activation = default;
     }
 }
 
-class InfernWellAOE(BossModule module) : Components.GenericAOEs(module)
+// a pull towards the marked brand, which then explodes in an 8y circle; the cast itself refines the timing
+class InfernWellAOE(BossModule module) : Components.GenericAOEs(module, AID.InfernWellAOE)
 {
-    private static readonly AOEShapeCircle _circle = new(8);
-    public AOEInstance? AOE;
+    private static readonly AOEShapeCircle Blast = new(8);
+    public WPos Origin { get; private set; }
+    public DateTime Activation { get; private set; }
+    public bool Active => Activation != default;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(AOE);
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        if (Active)
+            yield return new(Blast, Origin, default, Activation);
+    }
+
+    public bool Covers(WPos pos) => Active && pos.InCircle(Origin, Blast.Radius);
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
-        if ((SID)status.ID == SID.MechanicStatus && status.Extra == 0x1CB)
-            AOE = new(_circle, actor.Position, default, WorldState.FutureTime(9.1f));
+        if (BrandMechanic.Is(status, BrandMechanic.Pull))
+        {
+            Origin = actor.Position;
+            Activation = WorldState.FutureTime(9.1f);
+        }
+    }
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if (spell.Action == WatchedAction && Active)
+            Activation = Module.CastFinishAt(spell);
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.InfernWellAOE)
-            AOE = null;
+        if (spell.Action == WatchedAction)
+            Activation = default;
     }
 }
 
-class InfernWellPull(BossModule module) : Components.Knockback(module)
+class InfernWellPull(BossModule module) : Components.Knockback(module, AID.InfernWell)
 {
-    private readonly InfernWellAOE? _aoe = module.FindComponent<InfernWellAOE>();
-    private Source? _source;
+    private const float PullDistance = 15;
+    private InfernWellAOE? _blast;
+    private WPos _origin;
+    private DateTime _activation;
 
-    public override IEnumerable<Source> Sources(int slot, Actor actor) => Utils.ZeroOrOne(_source);
+    public override IEnumerable<Source> Sources(int slot, Actor actor)
+    {
+        if (_activation != default)
+            yield return new(_origin, PullDistance, _activation, Kind: Kind.TowardsOrigin, MinDistance: 1);
+    }
 
-    public override bool DestinationUnsafe(int slot, Actor actor, WPos pos) => _aoe?.AOE?.Check(pos) ?? false;
+    // landing inside the explosion that follows is just as bad as getting pulled into a wall
+    public override bool DestinationUnsafe(int slot, Actor actor, WPos pos)
+    {
+        _blast ??= Module.FindComponent<InfernWellAOE>();
+        return _blast?.Covers(pos) ?? false;
+    }
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        if (_source is { } src && !IsImmune(slot, src.Activation))
-            hints.AddForbiddenZone(ShapeDistance.Circle(src.Origin, 23), src.Activation);
+        // without immunity, stand far enough away that the pull can't drag you into the blast (8 radius + 15 pull)
+        if (_activation != default && !IsImmune(slot, _activation))
+            hints.AddForbiddenZone(ShapeDistance.Circle(_origin, 8 + PullDistance), _activation);
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
         base.OnStatusGain(actor, status);
-        if ((SID)status.ID == SID.MechanicStatus && status.Extra == 0x1CB)
-            _source = new(actor.Position, 15, WorldState.FutureTime(7.6f), Kind: Kind.TowardsOrigin, MinDistance: 1);
+        if (BrandMechanic.Is(status, BrandMechanic.Pull))
+        {
+            _origin = actor.Position;
+            _activation = WorldState.FutureTime(7.6f);
+        }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID == AID.InfernWell)
-            _source = null;
+        base.OnEventCast(caster, spell);
+        if (spell.Action == WatchedAction)
+            _activation = default;
     }
 }
 
@@ -373,17 +416,17 @@ class V014ZelessGahStates : StateMachineBuilder
     public V014ZelessGahStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
-            .ActivateOnEnter<ArcaneFont>()
+            .ActivateOnEnter<ShowOfStrength>()
+            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<FiresteelFracture>()
+            .ActivateOnEnter<PureFire>()
+            .ActivateOnEnter<CastShadow>()
             .ActivateOnEnter<BallOfFire>()
+            .ActivateOnEnter<ArcaneFont>()
             .ActivateOnEnter<TrespassersPyre>()
             .ActivateOnEnter<InfernGale>()
             .ActivateOnEnter<InfernWellAOE>()
-            .ActivateOnEnter<InfernWellPull>()
-            .ActivateOnEnter<PureFire>()
-            .ActivateOnEnter<FiresteelFracture>()
-            .ActivateOnEnter<ShowOfStrength>()
-            .ActivateOnEnter<CastShadow>();
+            .ActivateOnEnter<InfernWellPull>();
     }
 }
 

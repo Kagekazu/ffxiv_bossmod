@@ -83,70 +83,104 @@ public enum IconID : uint
     StockBreak = 590, // player
 }
 
+// in/out from the boss's position; when several are queued, only the ones resolving next are drawn
 class AlexandrianThunderIV(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle _circle = new(8);
-    private static readonly AOEShapeDonut _donut = new(8, 24);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeCircle In = new(8);
+    private static readonly AOEShapeDonut Out = new(8, 24);
+    private readonly List<(Actor Caster, AOEShape Shape)> _casts = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes.Take(1);
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        var next = DateTime.MaxValue;
+        foreach (var (caster, _) in _casts)
+        {
+            if (caster.CastInfo is { } cast && Module.CastFinishAt(cast) is var at && at < next)
+                next = at;
+        }
+
+        foreach (var (caster, shape) in _casts)
+        {
+            if (caster.CastInfo is not { } cast)
+                continue;
+            var at = Module.CastFinishAt(cast);
+            if (at <= next.AddSeconds(1))
+                yield return new(shape, cast.LocXZ, default, at);
+        }
+    }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        AOEShape? shape = (AID)spell.Action.ID switch
-        {
-            AID.AlexandrianThunderIVCircle1 or AID.AlexandrianThunderIVCircle2 => _circle,
-            AID.AlexandrianThunderIVDonut1 or AID.AlexandrianThunderIVDonut2 => _donut,
-            _ => null
-        };
-        if (shape != null)
-            _aoes.Add(new(shape, spell.LocXZ, default, Module.CastFinishAt(spell)));
+        if (ShapeFor(spell.Action) is { } shape)
+            _casts.Add((caster, shape));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if (_aoes.Count > 0 && (AID)spell.Action.ID is AID.AlexandrianThunderIVCircle1 or AID.AlexandrianThunderIVCircle2 or AID.AlexandrianThunderIVDonut1 or AID.AlexandrianThunderIVDonut2)
-            _aoes.RemoveAt(0);
+        if (ShapeFor(spell.Action) != null)
+        {
+            ++NumCasts;
+            _casts.RemoveAll(c => c.Caster == caster);
+        }
     }
+
+    private static AOEShape? ShapeFor(ActionID action) => (AID)action.ID switch
+    {
+        AID.AlexandrianThunderIVCircle1 or AID.AlexandrianThunderIVCircle2 => In,
+        AID.AlexandrianThunderIVDonut1 or AID.AlexandrianThunderIVDonut2 => Out,
+        _ => null
+    };
 }
 
-class ShockSpread(BossModule module) : Components.UniformStackSpread(module, 0, 4, alwaysShowSpreads: true)
+// circles are baited on the marked players, then lock in place and pulse
+class ShockBait(BossModule module) : Components.BaitAwayIcon(module, new AOEShapeCircle(4), (uint)IconID.Shock, AID.ShockLock, 8, centerAtTarget: true);
+
+class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
 {
-    public override void OnEventIcon(Actor actor, uint iconID, ulong targetID)
+    private static readonly AOEShapeCircle Shape = new(4);
+    private const int CyclesPerPuddle = 2; // every puddle goes through the Shock1-6 sequence twice
+    private readonly List<(WPos Origin, int Cycles)> _puddles = [];
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (iconID == (uint)IconID.Shock)
-            AddSpread(actor, WorldState.FutureTime(8));
+        foreach (var p in _puddles)
+            yield return new(Shape, p.Origin);
     }
-
-    public override void OnEventCast(Actor caster, ActorCastEvent spell)
-    {
-        if ((AID)spell.Action.ID == AID.ShockLock)
-            Spreads.Clear();
-    }
-}
-
-class ShockAOE(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeCircle _shape = new(4);
-    private readonly List<AOEInstance> _aoes = [];
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         switch ((AID)spell.Action.ID)
         {
             case AID.ShockLock:
-                _aoes.Add(new(_shape, caster.Position));
+                _puddles.Add((caster.Position, 0));
                 break;
             case AID.Shock6:
-                if (++NumCasts >= 2 * _aoes.Count)
-                {
-                    _aoes.Clear();
-                    NumCasts = 0;
-                }
+                ++NumCasts;
+                FinishCycle(caster.Position);
                 break;
         }
+    }
+
+    private void FinishCycle(WPos pos)
+    {
+        if (_puddles.Count == 0)
+            return;
+
+        // match by position; if a helper is somewhere else, credit the puddle that is furthest behind
+        var index = _puddles.FindIndex(p => p.Origin.AlmostEqual(pos, 1));
+        if (index < 0)
+        {
+            index = 0;
+            for (var i = 1; i < _puddles.Count; ++i)
+                if (_puddles[i].Cycles < _puddles[index].Cycles)
+                    index = i;
+        }
+
+        var (origin, cycles) = _puddles[index];
+        if (++cycles >= CyclesPerPuddle)
+            _puddles.RemoveAt(index);
+        else
+            _puddles[index] = (origin, cycles);
     }
 }
 
@@ -155,12 +189,14 @@ class HolyHazard(BossModule module) : Components.StandardAOEs(module, AID.HolyHa
 class SpecterOfTheLost(BossModule module) : Components.BaitAwayCast(module, AID.SpecterOfTheLost, new AOEShapeCone(50, 22.5f.Degrees()));
 class ThunderSlash(BossModule module) : Components.StandardAOEs(module, AID.ThunderSlash, new AOEShapeCone(24, 30.Degrees()), maxCasts: 4);
 
+// ignores knockback immunity: the only way to survive is to stand close enough to the middle that the push doesn't reach the edge
 class RosebloodBloom(BossModule module) : Components.KnockbackFromCastTarget(module, AID.RosebloodBloom, 10, ignoreImmunes: true)
 {
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
+        var safeRadius = Arena.Bounds.Radius - Distance;
         foreach (var c in Casters)
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(c.Position, 6), Module.CastFinishAt(c.CastInfo));
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(c.Position, safeRadius), Module.CastFinishAt(c.CastInfo));
     }
 }
 
@@ -169,8 +205,11 @@ class PerfumedQuietus(BossModule module) : Components.RaidwideCast(module, AID.R
 class ThornedCatharsis(BossModule module) : Components.RaidwideCast(module, AID.ThornedCatharsis);
 class ValorousAscension(BossModule module) : Components.RaidwideMultiHit(module, AID.ValorousAscension1, [AID.ValorousAscension1, AID.ValorousAscension2, AID.ValorousAscension3], 0, 0.95f, 3);
 
+// one stack marker, hit four times in a row
 class StockBreak(BossModule module) : Components.UniformStackSpread(module, 6, 0, 8, 8, stackHits: 4)
 {
+    private static readonly AID[] HitOrder = [AID.StockBreak1, AID.StockBreak2, AID.StockBreak3, AID.StockBreak4];
+
     public override void OnEventIcon(Actor actor, uint iconID, ulong targetID)
     {
         if (iconID == (uint)IconID.StockBreak)
@@ -179,153 +218,165 @@ class StockBreak(BossModule module) : Components.UniformStackSpread(module, 6, 0
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        var remaining = (AID)spell.Action.ID switch
+        var hit = Array.IndexOf(HitOrder, (AID)spell.Action.ID);
+        if (hit < 0)
+            return;
+
+        var hitsLeft = HitOrder.Length - 1 - hit;
+        if (hitsLeft == 0)
         {
-            AID.StockBreak1 => 3,
-            AID.StockBreak2 => 2,
-            AID.StockBreak3 => 1,
-            AID.StockBreak4 => 0,
-            _ => -1
-        };
-        if (remaining == 0)
             Stacks.Clear();
-        else if (remaining > 0)
-            for (var i = 0; i < Stacks.Count; ++i)
-                Stacks[i] = Stacks[i] with { Activation = WorldState.FutureTime(1.1f), Hits = remaining };
-    }
-}
-
-class ArenaChanges(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeCircle _shape = new(4);
-    private AOEInstance? _aoe;
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.QueensCrusade)
-            _aoe = new(_shape, Arena.Center, default, Module.CastFinishAt(spell, 0.1f));
-    }
-
-    public override void OnMapEffect(byte index, uint state)
-    {
-        if (index != 0x01)
             return;
-        switch (state)
+        }
+
+        for (var i = 0; i < Stacks.Count; ++i)
         {
-            case 0x00020001:
-                _aoe = null;
-                Arena.Bounds = T04Zelenia.DonutArena;
-                break;
-            case 0x00080004:
-                Arena.Bounds = T04Zelenia.DefaultArena;
-                break;
+            var stack = Stacks[i];
+            stack.Hits = hitsLeft;
+            stack.Activation = WorldState.FutureTime(1.1f);
+            Stacks[i] = stack;
         }
     }
 }
 
-class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
+// Queen's Crusade telegraphs a hole in the middle; the map effect swaps the arena to a donut and later back again
+class CenterVoid(BossModule module) : Components.GenericAOEs(module, AID.QueensCrusade)
 {
-    private static readonly AOEShapeCone _cone = new(16, 30.Degrees());
-    private static readonly AOEShapeCircle _circle = new(4);
-    private readonly List<(ulong caster, AOEInstance aoe)> _temp = [];
-    private readonly List<AOEInstance> _aoes = [];
-    private readonly bool[] _tiles = new bool[6];
+    private static readonly AOEShapeCircle Hole = new(4);
+    private DateTime _telegraph;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
-
-    public override void OnMapEffect(byte index, uint state)
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (index is < 0x04 or > 0x09)
-            return;
-        var tile = (6 - (index - 0x04)) % 6;
-        switch (state)
-        {
-            case 0x00400100:
-                _tiles[tile] = true;
-                break;
-            case 0x00040020:
-                _tiles[tile] = false;
-                break;
-        }
+        if (_telegraph != default)
+            yield return new(Hole, Arena.Center, Activation: _telegraph);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var aid = (AID)spell.Action.ID;
-        if (aid is AID.AlexandrianThunderIII1 or AID.AlexandrianThunderIII2)
+        if (spell.Action == WatchedAction)
+            _telegraph = Module.CastFinishAt(spell, 0.1f);
+    }
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        if (index != 1)
+            return;
+
+        if (state == 0x00020001)
         {
-            var visited = new bool[6];
-            var pos = Arena.Center;
-            var loc = spell.LocXZ;
-            var act = Module.CastFinishAt(spell);
-            var id = caster.InstanceID;
-            _temp.Add((id, new(_circle, loc, default, act)));
-
-            for (var i = 0; i < 6; ++i)
-            {
-                if (!_tiles[i] || visited[i])
-                    continue;
-                if (!Intersect.CircleCone(loc, 4, pos, 16, (180 - 60 * i).Degrees().ToDirection(), 30.Degrees()))
-                    continue;
-
-                var left = i;
-                while (true)
-                {
-                    var prev = (left - 1 + 6) % 6;
-                    if (!_tiles[prev] || visited[prev])
-                        break;
-                    left = prev;
-                }
-                var right = i;
-                while (true)
-                {
-                    var next = (right + 1) % 6;
-                    if (!_tiles[next] || visited[next])
-                        break;
-                    right = next;
-                }
-
-                for (var j = left; ; j = (j + 1) % 6)
-                {
-                    if (!visited[j])
-                    {
-                        visited[j] = true;
-                        _temp.Add((id, new(_cone, pos, (180 - 60 * j).Degrees(), act)));
-                    }
-                    if (j == right)
-                        break;
-                }
-                break;
-            }
-            Rebuild();
+            _telegraph = default;
+            Arena.Bounds = T04Zelenia.DonutArena;
         }
-        else if (aid is AID.AlexandrianThunderIVCircle2 or AID.AlexandrianThunderIVDonut2 && _aoes.Count == 0)
+        else if (state == 0x00080004)
         {
-            var act = Module.CastFinishAt(spell);
-            for (var i = 0; i < 6; ++i)
-                if (_tiles[i])
-                    _aoes.Add(new(_cone, Arena.Center, (180 - 60 * i).Degrees(), act));
+            Arena.Bounds = T04Zelenia.DefaultArena;
         }
+    }
+}
+
+// the arena is split into six 60-degree slices that light up with roses;
+// slice k is driven by map effect index 4+k and faces 180+60k degrees from the center
+class RoseTiles(BossModule module) : BossComponent(module)
+{
+    public const int NumTiles = 6;
+    public static readonly AOEShapeCone Slice = new(16, 30.Degrees());
+
+    public BitMask Lit;
+
+    public static Angle Direction(int tile) => (180 + 60 * tile).Degrees();
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        var tile = index - 4;
+        if (tile is < 0 or >= NumTiles)
+            return;
+
+        if (state == 0x00400100)
+            Lit.Set(tile);
+        else if (state == 0x00040020)
+            Lit.Clear(tile);
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if (id != 0x1E46)
-            return;
-        var index = (int)MathF.Round(actor.Rotation.Deg) switch
+        if (id == 0x1E46 && TileFromSpawnRotation(actor.Rotation) is var tile && tile >= 0)
+            Lit.Set(tile);
+    }
+
+    // lit slices touching the given one, walking around the ring in both directions
+    public BitMask ConnectedTo(int tile)
+    {
+        var group = new BitMask();
+        if (!Lit[tile])
+            return group;
+
+        group.Set(tile);
+        for (var t = (tile + 1) % NumTiles; t != tile && Lit[t]; t = (t + 1) % NumTiles)
+            group.Set(t);
+        for (var t = (tile + NumTiles - 1) % NumTiles; t != tile && Lit[t]; t = (t + NumTiles - 1) % NumTiles)
+            group.Set(t);
+        return group;
+    }
+
+    // the rose actors spawn with one of three facings per slice (values from logs)
+    private static int TileFromSpawnRotation(Angle rotation) => (int)MathF.Round(rotation.Deg) switch
+    {
+        180 or 143 or -143 => 0,
+        -120 or -156 or -83 => 1,
+        -60 or -96 or -23 => 2,
+        0 or 36 or -36 => 3,
+        59 or 23 or 96 => 4,
+        119 or 83 or 156 => 5,
+        _ => -1
+    };
+}
+
+// each strike hits its landing spot plus every lit slice it touches (and the slices connected to those);
+// the second in/out of the fight instead electrifies all lit slices at once
+class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
+{
+    private static readonly AOEShapeCircle Strike = new(4);
+    private RoseTiles? _tiles;
+    private readonly List<(ulong Caster, WPos Target, BitMask Tiles, DateTime Activation)> _strikes = [];
+    private DateTime _surge;
+    private int _surgeCasts;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        var tileActivation = new DateTime[RoseTiles.NumTiles];
+        foreach (var s in _strikes)
         {
-            143 or -143 or 180 => 0,
-            83 or 156 or 119 => 1,
-            96 or 23 or 59 => 2,
-            0 or -36 or 36 => 3,
-            -96 or -23 or -60 => 4,
-            -120 or -156 or -83 => 5,
-            _ => -1
-        };
-        if (index >= 0)
-            _tiles[index] = true;
+            yield return new(Strike, s.Target, default, s.Activation);
+            foreach (var t in s.Tiles.SetBits())
+                if (tileActivation[t] == default || s.Activation < tileActivation[t])
+                    tileActivation[t] = s.Activation;
+        }
+
+        _tiles ??= Module.FindComponent<RoseTiles>();
+        if (_surge != default && _tiles != null)
+            foreach (var t in _tiles.Lit.SetBits())
+                if (tileActivation[t] == default)
+                    tileActivation[t] = _surge;
+
+        for (var t = 0; t < RoseTiles.NumTiles; ++t)
+            if (tileActivation[t] != default)
+                yield return new(RoseTiles.Slice, Arena.Center, RoseTiles.Direction(t), tileActivation[t]);
+    }
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        switch ((AID)spell.Action.ID)
+        {
+            case AID.AlexandrianThunderIII1:
+            case AID.AlexandrianThunderIII2:
+                _strikes.Add((caster.InstanceID, spell.LocXZ, TilesHitFrom(spell.LocXZ), Module.CastFinishAt(spell)));
+                break;
+            case AID.AlexandrianThunderIVCircle2:
+            case AID.AlexandrianThunderIVDonut2:
+                if (_surge == default && _strikes.Count == 0)
+                    _surge = Module.CastFinishAt(spell);
+                break;
+        }
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
@@ -334,58 +385,64 @@ class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
         {
             case AID.AlexandrianThunderIII1:
             case AID.AlexandrianThunderIII2:
-                _temp.RemoveAll(a => a.caster == caster.InstanceID);
-                Rebuild();
+                ++NumCasts;
+                _strikes.RemoveAll(s => s.Caster == caster.InstanceID);
                 break;
             case AID.AlexandrianThunderIVCircle2:
             case AID.AlexandrianThunderIVDonut2:
-                if (++NumCasts == 2)
+                if (_surge != default && ++_surgeCasts >= 2)
                 {
-                    _aoes.Clear();
-                    NumCasts = 0;
+                    _surge = default;
+                    _surgeCasts = 0;
                 }
                 break;
         }
     }
 
-    private void Rebuild()
+    private BitMask TilesHitFrom(WPos target)
     {
-        _aoes.Clear();
-        var visited = new bool[6];
-        foreach (var (_, aoe) in _temp)
-        {
-            if (ReferenceEquals(aoe.Shape, _circle))
-            {
-                _aoes.Add(aoe);
-                continue;
-            }
-            var slice = (int)MathF.Round((180 - aoe.Rotation.Deg) / 60f);
-            if (slice is >= 0 and < 6 && !visited[slice])
-            {
-                visited[slice] = true;
-                _aoes.Add(aoe);
-            }
-        }
+        var hit = new BitMask();
+        _tiles ??= Module.FindComponent<RoseTiles>();
+        if (_tiles == null)
+            return hit;
+        for (var t = 0; t < RoseTiles.NumTiles; ++t)
+            if (_tiles.Lit[t] && !hit[t] && Intersect.CircleCone(target, Strike.Radius, Arena.Center, RoseTiles.Slice.Radius, RoseTiles.Direction(t).ToDirection(), RoseTiles.Slice.HalfAngle))
+                hit |= _tiles.ConnectedTo(t);
+        return hit;
     }
 }
 
-class ValorousAscensionRect(BossModule module) : Components.GenericAOEs(module)
+// briar thorns animate ~11s before firing their line; the cast that follows gives exact position and timing
+class ValorousAscensionRect(BossModule module) : Components.GenericAOEs(module, AID.ValorousAscensionRect)
 {
-    private static readonly AOEShapeRect _shape = new(40, 4);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeRect Line = new(40, 4);
+    private const int MaxShown = 2;
+    private readonly List<(ulong Thorn, WPos Origin, Angle Direction, DateTime Activation)> _lines = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes.Take(2);
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var l in _lines.OrderBy(l => l.Activation).Take(MaxShown))
+            yield return new(Line, l.Origin, l.Direction, l.Activation);
+    }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if (id == 0x11DB && (OID)actor.OID == OID.BriarThorn1)
-            _aoes.Add(new(_shape, actor.Position, actor.Rotation, WorldState.FutureTime(11.1f)));
+        if ((OID)actor.OID == OID.BriarThorn1 && id == 0x11DB)
+            _lines.Add((actor.InstanceID, actor.Position, actor.Rotation, WorldState.FutureTime(11.1f)));
+    }
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if (spell.Action != WatchedAction)
+            return;
+        _lines.RemoveAll(l => l.Thorn == caster.InstanceID);
+        _lines.Add((caster.InstanceID, caster.Position, spell.Rotation, Module.CastFinishAt(spell)));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if (_aoes.Count > 0 && (AID)spell.Action.ID == AID.ValorousAscensionRect)
-            _aoes.RemoveAt(0);
+        if (spell.Action == WatchedAction)
+            _lines.RemoveAll(l => l.Thorn == caster.InstanceID);
     }
 }
 
@@ -395,23 +452,25 @@ class T04ZeleniaStates : StateMachineBuilder
     {
         // TODO: enrage never reached (kill at ~6:50)
         TrivialPhase()
-            .ActivateOnEnter<ArenaChanges>()
-            .ActivateOnEnter<AlexandrianThunderIV>()
-            .ActivateOnEnter<AlexandrianThunderIII>()
-            .ActivateOnEnter<ShockSpread>()
-            .ActivateOnEnter<ShockAOE>()
-            .ActivateOnEnter<PowerBreak>()
-            .ActivateOnEnter<HolyHazard>()
-            .ActivateOnEnter<SpecterOfTheLost>()
-            .ActivateOnEnter<ThunderSlash>()
-            .ActivateOnEnter<RosebloodBloom>()
+            .ActivateOnEnter<ThornedCatharsis>()
             .ActivateOnEnter<PerfumedQuietus>()
             .ActivateOnEnter<ValorousAscension>()
-            .ActivateOnEnter<ThornedCatharsis>()
+            .ActivateOnEnter<ValorousAscensionRect>()
+            .ActivateOnEnter<SpecterOfTheLost>()
+            .ActivateOnEnter<PowerBreak>()
+            .ActivateOnEnter<HolyHazard>()
+            .ActivateOnEnter<ThunderSlash>()
+            .ActivateOnEnter<RosebloodBloom>()
             .ActivateOnEnter<StockBreak>()
-            .ActivateOnEnter<ValorousAscensionRect>();
+            .ActivateOnEnter<ShockBait>()
+            .ActivateOnEnter<ShockPuddles>()
+            .ActivateOnEnter<CenterVoid>()
+            .ActivateOnEnter<AlexandrianThunderIV>()
+            .ActivateOnEnter<RoseTiles>()
+            .ActivateOnEnter<AlexandrianThunderIII>();
     }
 }
+
 
 [ModuleInfo(Contributors = "Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1030, NameID = 13861)]
 public class T04Zelenia(ModuleInit init) : BossModule(init, new(100, 100), DefaultArena)

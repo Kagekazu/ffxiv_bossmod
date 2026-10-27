@@ -57,19 +57,20 @@ class D083Stigma4States : StateMachineBuilder
     {
         // TODO: forced march duration unverified (2s); edge bleed zone size unknown
         TrivialPhase()
+            .ActivateOnEnter<AtomicRay>()
             .ActivateOnEnter<Mindhack>()
             .ActivateOnEnter<MindhackMarch>()
-            .ActivateOnEnter<ElectromagneticReleaseIn>()
             .ActivateOnEnter<ElectromagneticReleaseOut>()
+            .ActivateOnEnter<ElectromagneticReleaseIn>()
+            // adds
+            .ActivateOnEnter<OmegaFrame>()
+            .ActivateOnEnter<SelfDestructOmega>()
             .ActivateOnEnter<ProtoWaveCannon>()
-            .ActivateOnEnter<Rush>()
+            .ActivateOnEnter<HybridDragon>()
+            .ActivateOnEnter<SelfDestructDragon>()
             .ActivateOnEnter<FireBreath>()
             .ActivateOnEnter<Touchdown>()
-            .ActivateOnEnter<SelfDestructOmega>()
-            .ActivateOnEnter<SelfDestructDragon>()
-            .ActivateOnEnter<AtomicRay>()
-            .ActivateOnEnter<OmegaFrame>()
-            .ActivateOnEnter<HybridDragon>();
+            .ActivateOnEnter<Rush>();
     }
 }
 

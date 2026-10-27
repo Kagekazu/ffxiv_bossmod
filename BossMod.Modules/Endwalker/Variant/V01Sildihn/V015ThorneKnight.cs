@@ -37,28 +37,34 @@ public enum AID : uint
     SignalFlare = 28923, // Helper->self, 7.0s cast, range 10 circle
 }
 
+// puppets fire a 6y-wide line after they light up; artillery carriages along one of the four walls (picked by map effect 0-3)
+// fire the same lines ~3.7s after their wall is announced
 class SpringToLife(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect _rect = new(45, 3);
-    private readonly List<(AOEInstance aoe, bool artillery)> _aoes = [];
+    private static readonly AOEShapeRect Shot = new(45, 3);
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes.Select(a => a.aoe);
+    // carriage positions per wall, all facing into the room
+    private static readonly (WPos[] Carriages, Angle Facing)[] Walls =
+    [
+        ([new(263, -235), new(271.5f, -243.5f), new(280, -252)], 45.Degrees()),
+        ([new(294, -256), new(302.5f, -247.5f), new(311, -239)], -45.Degrees()),
+        ([new(267, -220.5f), new(275.5f, -212), new(284, -203.5f)], 135.Degrees()),
+        ([new(298, -208), new(306.5f, -216.5f), new(315, -225)], -135.Degrees()),
+    ];
+
+    private readonly Dictionary<ulong, AOEInstance> _puppets = [];
+    private readonly List<AOEInstance> _carriages = [];
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _puppets.Values.Concat(_carriages);
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (state != 0x00020001)
+        if (state != 0x00020001 || index >= Walls.Length)
             return;
-        (WPos[] positions, Angle rot) carriages = index switch
-        {
-            0x00 => ([new(263, -235), new(280, -252), new(271.5f, -243.5f)], 45.Degrees()),
-            0x01 => ([new(294, -256), new(311, -239), new(302.5f, -247.5f)], -45.Degrees()),
-            0x02 => ([new(275.5f, -212), new(284, -203.5f), new(267, -220.5f)], 135.Degrees()),
-            0x03 => ([new(315, -225), new(306.5f, -216.5f), new(298, -208)], -135.Degrees()),
-            _ => ([], default)
-        };
+        var (positions, facing) = Walls[index];
         var activation = WorldState.FutureTime(3.7f);
-        foreach (var p in carriages.positions)
-            _aoes.Add((new(_rect, p, carriages.rot, activation), true));
+        foreach (var p in positions)
+            _carriages.Add(new(Shot, p, facing, activation));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -66,27 +72,22 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.ActivatePuppetVisual:
-                _aoes.Add((new(_rect, caster.Position, spell.Rotation, WorldState.FutureTime(2.9f)), false));
+                _puppets[caster.InstanceID] = new(Shot, caster.Position, spell.Rotation, WorldState.FutureTime(2.9f));
                 break;
             case AID.MagicCannon:
-                if (++NumCasts == 3)
-                    RemoveGroup(false);
+                ++NumCasts;
+                if (!_puppets.Remove(caster.InstanceID) && _puppets.Count > 0)
+                    _puppets.Remove(_puppets.Keys.First());
                 break;
             case AID.AmaljaaArtillery:
-                if (++NumCasts == 6)
-                {
-                    RemoveGroup(true);
-                    NumCasts = 0;
-                }
+                ++NumCasts;
+                var index = _carriages.FindIndex(c => c.Origin.AlmostEqual(caster.Position, 1));
+                if (index < 0 && _carriages.Count > 0)
+                    index = 0;
+                if (index >= 0)
+                    _carriages.RemoveAt(index);
                 break;
         }
-    }
-
-    private void RemoveGroup(bool artillery)
-    {
-        var index = _aoes.FindIndex(a => a.artillery == artillery);
-        if (index >= 0)
-            _aoes.RemoveRange(index, Math.Min(3, _aoes.Count - index));
     }
 }
 
@@ -104,13 +105,13 @@ class V015ThorneKnightStates : StateMachineBuilder
     {
         TrivialPhase()
             .ActivateOnEnter<SpringToLife>()
-            .ActivateOnEnter<BlisteringBlow>()
-            .ActivateOnEnter<BlazingBeacon>()
-            .ActivateOnEnter<SacredFlay>()
-            .ActivateOnEnter<SignalFlare>()
             .ActivateOnEnter<Explosion>()
+            .ActivateOnEnter<SignalFlare>()
             .ActivateOnEnter<ForeHonor>()
-            .ActivateOnEnter<Cogwheel>();
+            .ActivateOnEnter<SacredFlay>()
+            .ActivateOnEnter<BlazingBeacon>()
+            .ActivateOnEnter<Cogwheel>()
+            .ActivateOnEnter<BlisteringBlow>();
     }
 }
 

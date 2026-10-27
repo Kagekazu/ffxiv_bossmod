@@ -213,26 +213,32 @@ class BitingWindUpdraftVoidzone(BossModule module) : Components.GenericAOEs(modu
     }
 }
 
+// each visage sweeps its beam in 10-degree steps, 2s apart, five beams in total; all remaining beams are shown
 class SilverFlame(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeRect _rect = new(60, 5);
+    private static readonly AOEShapeRect Beam = new(60, 5);
+    private const int StepDeg = 10;
+    private const float Interval = 2;
+    private const int Beams = 5;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var increment = (AID)spell.Action.ID switch
+        var sign = (AID)spell.Action.ID switch
         {
-            AID.SilverFlameFirstCW => -10.Degrees(),
-            AID.SilverFlameFirstCCW => 10.Degrees(),
-            _ => default
+            AID.SilverFlameFirstCCW => 1,
+            AID.SilverFlameFirstCW => -1,
+            _ => 0
         };
-        if (increment != default)
-            Sequences.Add(new(_rect, caster.Position, spell.Rotation, increment, Module.CastFinishAt(spell), 2, 5, 5));
+        if (sign != 0)
+            Sequences.Add(new(Beam, caster.Position, spell.Rotation, (StepDeg * sign).Degrees(), Module.CastFinishAt(spell), Interval, Beams, Beams));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is AID.SilverFlameFirstCW or AID.SilverFlameFirstCCW or AID.SilverFlameRest)
-            AdvanceSequence(caster.Position, spell.Rotation, WorldState.CurrentTime);
+        if ((AID)spell.Action.ID is not (AID.SilverFlameFirstCW or AID.SilverFlameFirstCCW or AID.SilverFlameRest))
+            return;
+        if (!AdvanceSequence(caster.Position, spell.Rotation, WorldState.CurrentTime))
+            ReportError($"unexpected silver flame from {caster.InstanceID:X}");
     }
 }
 
@@ -241,20 +247,22 @@ class V013GladiatorOfSildihStates : StateMachineBuilder
     public V013GladiatorOfSildihStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<RingOfMight>()
-            .ActivateOnEnter<SculptorsPassion>()
+            // boss
             .ActivateOnEnter<FlashOfSteel1>()
             .ActivateOnEnter<FlashOfSteel2>()
-            .ActivateOnEnter<Landing>()
-            .ActivateOnEnter<ShatteringSteel>()
             .ActivateOnEnter<MightySmite>()
+            .ActivateOnEnter<SculptorsPassion>()
+            .ActivateOnEnter<RingOfMight>()
             .ActivateOnEnter<RushOfMight>()
+            .ActivateOnEnter<ShatteringSteel>()
+            .ActivateOnEnter<Landing>()
+            // routes
             .ActivateOnEnter<RackAndRuin>()
             .ActivateOnEnter<SunderedRemains>()
             .ActivateOnEnter<GoldenFlame>()
             .ActivateOnEnter<SilverFlame>()
-            .ActivateOnEnter<BitingWindUpdraft>()
             .ActivateOnEnter<BitingWindSmall>()
+            .ActivateOnEnter<BitingWindUpdraft>()
             .ActivateOnEnter<BitingWindUpdraftVoidzone>();
     }
 }

@@ -35,7 +35,8 @@ public enum SID : uint
     GhostlyGuise = 3949, // none->player
 }
 
-class ImpactArenaChange(BossModule module) : BossComponent(module)
+// while the impact lines are active, the arena is a cross for flesh players and the full square for ghosts
+class CrossArena(BossModule module) : BossComponent(module)
 {
     private bool _active;
     private GhostlyGuise? _ghost;
@@ -85,6 +86,8 @@ class GhostlyGuise(BossModule module) : Components.GenericAOEs(module)
     private IllIntentTethers? _seek;
 
     public BitMask Ghostly;
+
+    public static bool IsGhost(BossModule module, int slot) => module.FindComponent<GhostlyGuise>()?.Ghostly[slot] ?? false;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
@@ -237,14 +240,12 @@ class BitterRegret3(BossModule module) : Components.StandardAOEs(module, AID.Bit
 class Impact(BossModule module) : Components.StandardAOEs(module, AID.Impact, new AOEShapeRect(40, 2));
 class Ghostcrusher(BossModule module) : Components.SimpleLineStack(module, 4, 80, AID.GhostcrusherMarker, AID.Ghostcrusher, 5);
 
+// AI positioning for the spreads is left out while still a ghost - GhostlyGuise steers the player back onto a platform first
 class Ghostduster(BossModule module) : Components.SpreadFromCastTargets(module, AID.Ghostduster, 8)
 {
-    private GhostlyGuise? _ghost;
-
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        _ghost ??= Module.FindComponent<GhostlyGuise>();
-        if (_ghost == null || !_ghost.Ghostly[slot])
+        if (!GhostlyGuise.IsGhost(Module, slot))
             base.AddAIHints(slot, actor, assignment, hints);
     }
 }
@@ -254,17 +255,17 @@ class D073TraumereiStates : StateMachineBuilder
     public D073TraumereiStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<IllIntentTethers>()
-            .ActivateOnEnter<Ghostduster>()
-            .ActivateOnEnter<GhostlyGuise>()
-            .ActivateOnEnter<ImpactArenaChange>()
-            .ActivateOnEnter<Ghostcrusher>()
             .ActivateOnEnter<MaliciousMistRaidwide>()
             .ActivateOnEnter<Fleshbuster>()
-            .ActivateOnEnter<Impact>()
             .ActivateOnEnter<BitterRegret1>()
             .ActivateOnEnter<BitterRegret2>()
-            .ActivateOnEnter<BitterRegret3>();
+            .ActivateOnEnter<BitterRegret3>()
+            .ActivateOnEnter<Impact>()
+            .ActivateOnEnter<CrossArena>()
+            .ActivateOnEnter<GhostlyGuise>()
+            .ActivateOnEnter<IllIntentTethers>()
+            .ActivateOnEnter<Ghostduster>()
+            .ActivateOnEnter<Ghostcrusher>();
     }
 }
 

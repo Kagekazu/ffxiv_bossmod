@@ -45,97 +45,59 @@ public enum TetherID : uint
     PipeCleaner = 17, // player->Boss
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+// the opening raidwide trims the outer half-yalm of the circle
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.FlagrantCombustion, 2.9f, new AOEShapeDonut(20, 21), false, V025Enenra.DefaultBounds, 0x00020001, 0x28);
+
+// smoke wisps telegraph a half-arena sweep ~16.6s ahead; where it comes from depends on which wisp variant played its animation
+class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTheFire)
 {
-    private static readonly AOEShapeDonut _donut = new(20, 21);
-    private AOEInstance? _aoe;
+    private static readonly AOEShapeRect HalfArena = new(50, 25);
+    private static readonly float DiagonalReach = 11 * MathF.Sqrt(2);
+    private readonly List<AOEInstance> _sweeps = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.FlagrantCombustion && Arena.Bounds.Radius > 20)
-            _aoe = new(_donut, Arena.Center, default, Module.CastFinishAt(spell, 2.9f));
-    }
-
-    public override void OnMapEffect(byte index, uint state)
-    {
-        if (index == 0x28 && state == 0x00020001)
-        {
-            Arena.Bounds = V025Enenra.DefaultBounds;
-            _aoe = null;
-        }
-    }
-}
-
-class IntoTheFire(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeRect _rect = new(50, 25);
-    private const float Offset = 15.556349f;
-    private readonly List<AOEInstance> _aoes = [];
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _sweeps;
 
     public override void OnActorEAnim(Actor actor, uint state)
     {
-        if (state != 0x00010002)
+        if (state != 0x00010002 || Telegraph((OID)actor.OID) is not var (originAngle, reach, facing))
             return;
-        var rot = actor.Rotation;
-        (WDir offset, Angle dir)? smoke = (OID)actor.OID switch
-        {
-            OID.SmokeVisual1 => (Offset * (rot - 45.Degrees()).ToDirection(), rot + 90.Degrees()),
-            OID.SmokeVisual2 => (Offset * (rot + 45.Degrees()).ToDirection(), rot - 90.Degrees()),
-            OID.SmokeVisual3 => (22 * rot.ToDirection(), rot + 180.Degrees()),
-            _ => null
-        };
-        if (smoke is var (offset, dir))
-        {
-            var pos = actor.Position + offset;
-            _aoes.Add(new(_rect, new(MathF.Round(pos.X), MathF.Round(pos.Z)), dir, WorldState.FutureTime(16.6f)));
-        }
+        var origin = actor.Position + (actor.Rotation + originAngle).ToDirection() * reach;
+        // origins land on whole-yalm coordinates; rounding removes the float noise from the wisp's facing
+        origin = new(MathF.Round(origin.X), MathF.Round(origin.Z));
+        _sweeps.Add(new(HalfArena, origin, actor.Rotation + facing, WorldState.FutureTime(16.6f)));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if (_aoes.Count > 0 && (AID)spell.Action.ID == AID.IntoTheFire)
-            _aoes.RemoveAt(0);
-    }
-}
-
-class StringRock(BossModule module) : Components.ConcentricAOEs(module, _shapes)
-{
-    private static readonly AOEShape[] _shapes = [new AOEShapeCircle(6), new AOEShapeDonut(6, 12), new AOEShapeDonut(12, 18), new AOEShapeDonut(18, 24)];
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.KiseruClamor)
-            AddSequence(spell.LocXZ, Module.CastFinishAt(spell));
-    }
-
-    public override void OnCastFinished(Actor caster, ActorCastInfo spell)
-    {
-        if (Sequences.Count == 0)
+        if (spell.Action != WatchedAction || _sweeps.Count == 0)
             return;
-        var order = (AID)spell.Action.ID switch
-        {
-            AID.KiseruClamor => 0,
-            AID.BedrockUplift1 => 1,
-            AID.BedrockUplift2 => 2,
-            AID.BedrockUplift3 => 3,
-            _ => -1
-        };
-        AdvanceSequence(order, spell.LocXZ, WorldState.FutureTime(2));
+        var index = _sweeps.FindIndex(s => s.Origin.AlmostEqual(caster.Position, 2));
+        _sweeps.RemoveAt(index >= 0 ? index : 0);
     }
+
+    // (direction of the sweep origin relative to the wisp's facing, distance to it, sweep direction relative to the wisp's facing)
+    private static (Angle, float, Angle)? Telegraph(OID wisp) => wisp switch
+    {
+        OID.SmokeVisual1 => (-45.Degrees(), DiagonalReach, 90.Degrees()),
+        OID.SmokeVisual2 => (45.Degrees(), DiagonalReach, -90.Degrees()),
+        OID.SmokeVisual3 => (default(Angle), 22f, 180.Degrees()),
+        _ => null
+    };
 }
 
+class StringRock(BossModule module) : ExpandingRings(module, AID.KiseruClamor, new AOEShapeCircle(6), new AOEShapeDonut(6, 12), new AOEShapeDonut(12, 18), new AOEShapeDonut(18, 24));
+
+// knockback stops at walls; when the smoldering circles are around, the only safe landing spot is pushing from the very middle
 class ClearingSmoke(BossModule module) : Components.KnockbackFromCastTarget(module, AID.ClearingSmoke, 16, stopAtWall: true)
 {
-    private readonly Smoldering? _smoldering = module.FindComponent<Smoldering>();
+    private Smoldering? _smoldering;
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (Casters.Count > 0 && _smoldering?.Casters.Count > 0)
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Arena.Center, 4), Module.CastFinishAt(Casters[0].CastInfo));
+        _smoldering ??= Module.FindComponent<Smoldering>();
+        if (Casters.Count == 0 || _smoldering is not { Casters.Count: > 0 })
+            return;
+        hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center, 4), Module.CastFinishAt(Casters[0].CastInfo));
     }
 }
 
@@ -151,16 +113,16 @@ class V025EnenraStates : StateMachineBuilder
     public V025EnenraStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
-            .ActivateOnEnter<IntoTheFire>()
-            .ActivateOnEnter<StringRock>()
-            .ActivateOnEnter<Smoldering>()
-            .ActivateOnEnter<ClearingSmoke>()
+            .ActivateOnEnter<FlagrantCombustion>()
+            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<Snuff>()
             .ActivateOnEnter<PipeCleaner>()
             .ActivateOnEnter<Uplift>()
-            .ActivateOnEnter<Snuff>()
-            .ActivateOnEnter<FlagrantCombustion>()
-            .ActivateOnEnter<SmokeRings>();
+            .ActivateOnEnter<StringRock>()
+            .ActivateOnEnter<SmokeRings>()
+            .ActivateOnEnter<Smoldering>()
+            .ActivateOnEnter<ClearingSmoke>()
+            .ActivateOnEnter<IntoTheFire>();
     }
 }
 

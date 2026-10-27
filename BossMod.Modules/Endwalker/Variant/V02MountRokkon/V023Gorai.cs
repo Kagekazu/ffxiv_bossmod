@@ -72,47 +72,34 @@ public enum IconID : uint
     Tankbuster = 344, // player
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+// the opening raidwide turns the rim into a deathwall - stay within the inner 40x40 square
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.Unenlightenment, 0.5f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x16);
+
+// four octagonal platforms, one per quadrant 10y out on both axes; while one is raised, the ring around its edge is a gap
+class OctagonGaps(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect _inner = new(20, 20, 20);
-    private static readonly AOEShapeDonut _octagonGap = new(7.3f, 9.7f);
-    private AOEInstance? _shrink;
-    private readonly Dictionary<byte, AOEInstance> _octagons = [];
+    private const byte FirstIndex = 0x3D;
+    private const float QuadrantOffset = 10;
+    private static readonly AOEShapeDonut Gap = new(7.3f, 9.7f);
+    private BitMask _raised;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_shrink).Concat(_octagons.Values);
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if ((AID)spell.Action.ID == AID.Unenlightenment && Arena.Bounds.Radius > 21)
-            _shrink = new(_inner, Arena.Center, default, Module.CastFinishAt(spell, 0.5f), Inverted: true);
+        foreach (var q in _raised.SetBits())
+            yield return new(Gap, QuadrantCenter(q));
     }
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (index == 0x16 && state == 0x00020001)
-        {
-            Arena.Bounds = new ArenaBoundsSquare(20);
-            _shrink = null;
-        }
-        else if (index is >= 0x3D and <= 0x40 && state != 0x00020001)
-        {
-            if (state == 0x00200010)
-            {
-                WPos center = index switch
-                {
-                    0x3D => new(731, -200),
-                    0x3E => new(751, -200),
-                    0x3F => new(731, -180),
-                    _ => new(751, -180),
-                };
-                _octagons[index] = new(_octagonGap, center);
-            }
-            else
-            {
-                _octagons.Remove(index);
-            }
-        }
+        var quadrant = index - FirstIndex;
+        if (quadrant is < 0 or > 3 || state == 0x00020001)
+            return;
+        _raised[quadrant] = state == 0x00200010;
     }
+
+    // quadrants in map-effect order: NW, NE, SW, SE
+    private WPos QuadrantCenter(int quadrant)
+        => Module.Center + new WDir((quadrant & 1) == 0 ? -QuadrantOffset : QuadrantOffset, quadrant < 2 ? -QuadrantOffset : QuadrantOffset);
 }
 
 class FlameAndSulphur(BossModule module) : Components.GenericAOEs(module)
@@ -158,138 +145,123 @@ class FlameAndSulphur(BossModule module) : Components.GenericAOEs(module)
 
 class ImpurePurgation(BossModule module) : Components.GroupedAOEs(module, [AID.ImpurePurgationFirst, AID.ImpurePurgationSecond], new AOEShapeCone(60, 22.5f.Degrees()), 4);
 
+// eight towers on a circle of radius 11 around the middle (map effects 0x1F-0x26, clockwise from north) light up one after another;
+// only the oldest one is soakable, by up to four players
 class MalformedPrayer(BossModule module) : Components.GenericTowers(module)
 {
-    private readonly ImpurePurgation? _purgation = module.FindComponent<ImpurePurgation>();
+    private const byte FirstIndex = 0x1F;
+    private const float RingRadius = 11;
+    private ImpurePurgation? _purgation;
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (state != 0x00020001)
+        var spot = index - FirstIndex;
+        if (state != 0x00020001 || spot is < 0 or > 7)
             return;
-        WPos? pos = index switch
-        {
-            0x1F => new(741, -201),
-            0x20 => new(748.778f, -197.778f),
-            0x21 => new(752, -190),
-            0x22 => new(748.778f, -182.222f),
-            0x23 => new(741, -179),
-            0x24 => new(733.222f, -182.222f),
-            0x25 => new(730, -190),
-            0x26 => new(733.222f, -197.778f),
-            _ => null
-        };
-        if (pos is WPos origin)
-            Towers.Add(new(origin, 4, activation: WorldState.FutureTime(9)));
+        var offset = (180 - 45 * spot).Degrees().ToDirection() * RingRadius;
+        Towers.Add(new(Module.Center + offset, 4, activation: WorldState.FutureTime(9)));
+        RefreshSoakers();
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if (Towers.Count > 0 && (AID)spell.Action.ID == AID.Burst)
-            Towers.RemoveAt(0);
-    }
-
-    public override void Update()
-    {
-        for (var i = 0; i < Towers.Count; ++i)
-        {
-            var t = Towers[i];
-            t.MinSoakers = i > 0 ? 0 : 1;
-            t.MaxSoakers = i > 0 ? 0 : 4;
-            Towers[i] = t;
-        }
+        if ((AID)spell.Action.ID != AID.Burst || Towers.Count == 0)
+            return;
+        ++NumCasts;
+        Towers.RemoveAt(0);
+        RefreshSoakers();
     }
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (_purgation?.Casters.Count > 0 && Towers.Count > 0 && !Towers[0].IsInside(actor))
-            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Arena.Center, 3));
+        // while the cones are going off, anyone not already in the tower waits in the middle
+        _purgation ??= Module.FindComponent<ImpurePurgation>();
+        if (_purgation is { Casters.Count: > 0 } && Towers.Count > 0 && !Towers[0].IsInside(actor))
+            hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center, 3));
         else
             base.AddAIHints(slot, actor, assignment, hints);
     }
+
+    private void RefreshSoakers()
+    {
+        for (var i = 0; i < Towers.Count; ++i)
+        {
+            var tower = Towers[i];
+            (tower.MinSoakers, tower.MaxSoakers) = i == 0 ? (1, 4) : (0, 0);
+            Towers[i] = tower;
+        }
+    }
 }
 
+// lightning orbs: the first two simply go off as big circles; later one orb gets a debuff and shrinks while the others stay big
 class Thundercall(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle _small = new(8);
-    private static readonly AOEShapeCircle _big = new(18);
-    private readonly List<AOEInstance> _aoes = [];
-    private int _numInitial;
+    private static readonly AOEShapeCircle Small = new(8);
+    private static readonly AOEShapeCircle Large = new(18);
+    private readonly List<(WPos Position, bool Shrunk, DateTime Activation)> _pending = [];
+    private int _orbsSeen;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var p in _pending)
+            yield return new(p.Shrunk ? Small : Large, p.Position, default, p.Activation);
+    }
 
     public override void OnActorCreated(Actor actor)
     {
-        if (_numInitial < 2 && (OID)actor.OID == OID.BallOfLevin)
-        {
-            _aoes.Add(new(_big, actor.Position, default, WorldState.FutureTime(10.8f)));
-            ++_numInitial;
-        }
+        if ((OID)actor.OID == OID.BallOfLevin && _orbsSeen++ < 2)
+            _pending.Add((actor.Position, false, WorldState.FutureTime(10.8f)));
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
-        if ((OID)actor.OID != OID.BallOfLevin || (SID)status.ID != SID.SmallOrb)
+        if ((SID)status.ID != SID.SmallOrb || (OID)actor.OID != OID.BallOfLevin)
             return;
         var activation = WorldState.FutureTime(10);
-        _aoes.Add(new(_small, actor.Position, default, activation));
-        foreach (var orb in Module.Enemies(OID.BallOfLevin).Where(o => o != actor))
-            _aoes.Add(new(_big, orb.Position, default, activation));
+        foreach (var orb in Module.Enemies(OID.BallOfLevin))
+            _pending.Add((orb.Position, orb == actor, activation));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID is AID.ShockSmall or AID.ShockLarge)
-            _aoes.Clear();
+        {
+            ++NumCasts;
+            _pending.Clear();
+        }
     }
 }
 
+// a cross through the boss that turns by 22.5 degrees between each of its five hits; only the next hit is shown
 class WorldlyPursuit(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeCross _cross = new(60, 10);
+    private static readonly AOEShapeCross Cross = new(60, 10);
+    private const float TurnDeg = 22.5f;
+    private const float Interval = 3.7f;
+    private const int Hits = 5;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var increment = (AID)spell.Action.ID switch
+        var sign = (AID)spell.Action.ID switch
         {
-            AID.WorldlyPursuitFirstCW => -22.5f.Degrees(),
-            AID.WorldlyPursuitFirstCCW => 22.5f.Degrees(),
-            _ => default
+            AID.WorldlyPursuitFirstCCW => 1,
+            AID.WorldlyPursuitFirstCW => -1,
+            _ => 0
         };
-        if (increment != default)
-            Sequences.Add(new(_cross, spell.LocXZ, spell.Rotation, increment, Module.CastFinishAt(spell), 3.7f, 5, 1));
+        if (sign != 0)
+            Sequences.Add(new(Cross, spell.LocXZ, spell.Rotation, (TurnDeg * sign).Degrees(), Module.CastFinishAt(spell), Interval, Hits, 1));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is AID.WorldlyPursuitFirstCCW or AID.WorldlyPursuitFirstCW or AID.WorldlyPursuitRest && Sequences.Count > 0)
+        if ((AID)spell.Action.ID is not AID.WorldlyPursuitFirstCCW and not AID.WorldlyPursuitFirstCW and not AID.WorldlyPursuitRest || Sequences.Count == 0)
+            return;
+        if (!AdvanceSequence(Sequences[0].Origin, spell.Rotation, WorldState.CurrentTime))
             AdvanceSequence(0, WorldState.CurrentTime);
     }
 }
 
-class StringSnap(BossModule module) : Components.ConcentricAOEs(module, _shapes)
-{
-    private static readonly AOEShape[] _shapes = [new AOEShapeCircle(10), new AOEShapeDonut(10, 20), new AOEShapeDonut(20, 30)];
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if ((AID)spell.Action.ID == AID.StringSnap1)
-            AddSequence(spell.LocXZ, Module.CastFinishAt(spell));
-    }
-
-    public override void OnCastFinished(Actor caster, ActorCastInfo spell)
-    {
-        if (Sequences.Count == 0)
-            return;
-        var order = (AID)spell.Action.ID switch
-        {
-            AID.StringSnap1 => 0,
-            AID.StringSnap2 => 1,
-            AID.StringSnap3 => 2,
-            _ => -1
-        };
-        AdvanceSequence(order, spell.LocXZ, WorldState.FutureTime(2));
-    }
-}
+class StringSnap(BossModule module) : ExpandingRings(module, AID.StringSnap1, new AOEShapeCircle(10), new AOEShapeDonut(10, 20), new AOEShapeDonut(20, 30));
 
 class Unenlightenment(BossModule module) : Components.RaidwideCastDelay(module, AID.Unenlightenment, AID.UnenlightenmentAOE, 0.5f);
 class SpikeOfFlame(BossModule module) : Components.StandardAOEs(module, AID.SpikeOfFlameAOE, new AOEShapeCircle(5));
@@ -305,21 +277,24 @@ class V023GoraiStates : StateMachineBuilder
     public V023GoraiStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
+            // always
+            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<OctagonGaps>()
+            .ActivateOnEnter<Unenlightenment>()
+            .ActivateOnEnter<TorchingTorment>()
+            .ActivateOnEnter<FightingSpirits>()
+            .ActivateOnEnter<BiwaBreaker>()
+            .ActivateOnEnter<StringSnap>()
+            .ActivateOnEnter<SpikeOfFlame>()
+            .ActivateOnEnter<FlameAndSulphur>()
+            .ActivateOnEnter<MalformedPrayer>()
+            .ActivateOnEnter<ImpurePurgation>()
+            // route mechanics
             .ActivateOnEnter<PureShock>()
             .ActivateOnEnter<SelfDestruct>()
             .ActivateOnEnter<HumbleHammer>()
             .ActivateOnEnter<Thundercall>()
-            .ActivateOnEnter<WorldlyPursuit>()
-            .ActivateOnEnter<FightingSpirits>()
-            .ActivateOnEnter<BiwaBreaker>()
-            .ActivateOnEnter<ImpurePurgation>()
-            .ActivateOnEnter<StringSnap>()
-            .ActivateOnEnter<SpikeOfFlame>()
-            .ActivateOnEnter<FlameAndSulphur>()
-            .ActivateOnEnter<TorchingTorment>()
-            .ActivateOnEnter<MalformedPrayer>()
-            .ActivateOnEnter<Unenlightenment>();
+            .ActivateOnEnter<WorldlyPursuit>();
     }
 }
 

@@ -33,23 +33,29 @@ public enum SID : uint
     AreaOfInfluenceUp = 1909, // none->Helper, extra=0x1..0x4
 }
 
+// each pour leaves a lingering puddle (marked by the first area-of-influence stack on its helper);
+// puddles go away in the order they appeared, whenever a samovar plays its finishing animation
 class PipingPour(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle _shape = new(8);
-    private readonly List<AOEInstance> _aoes = [];
+    private static readonly AOEShapeCircle Puddle = new(8);
+    private readonly Queue<WPos> _puddles = new();
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
-
-    public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (id == 0x11DD && _aoes.Count > 0 && (OID)actor.OID == OID.SpectralSamovar)
-            _aoes.RemoveAt(0);
+        foreach (var p in _puddles)
+            yield return new(Puddle, p);
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
-        if (status.ID == (uint)SID.AreaOfInfluenceUp && status.Extra == 0x1)
-            _aoes.Add(new(_shape, actor.Position));
+        if ((SID)status.ID == SID.AreaOfInfluenceUp && status.Extra == 1)
+            _puddles.Enqueue(actor.Position);
+    }
+
+    public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
+    {
+        if ((OID)actor.OID == OID.SpectralSamovar && id == 0x11DD)
+            _puddles.TryDequeue(out _);
     }
 }
 
@@ -142,10 +148,10 @@ class D072JackInThePotStates : StateMachineBuilder
     {
         // TODO: Sordid Steam never seen (two clears)
         TrivialPhase()
-            .ActivateOnEnter<TeaAwhirl>()
-            .ActivateOnEnter<PipingPour>()
+            .ActivateOnEnter<LastDrop>()
             .ActivateOnEnter<SordidSteam>()
-            .ActivateOnEnter<LastDrop>();
+            .ActivateOnEnter<PipingPour>()
+            .ActivateOnEnter<TeaAwhirl>();
     }
 }
 
