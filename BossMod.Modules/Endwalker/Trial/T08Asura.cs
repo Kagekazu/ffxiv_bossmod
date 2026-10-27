@@ -30,7 +30,7 @@ public enum AID : uint
     IconographyPedestalPurge = 35969, // Boss->self, 5.0s cast, range 10 circle
     IconicExecution = 36017, // Boss->self, 4.0s cast, single-target
     IconicExecution2 = 36018, // Boss->self, 3.0s cast, single-target
-    PedestalPurge = 35970, // AsuraImage->self, 4.0s cast, range 27 circle (lumina data says range 60, which is obvious bs)
+    PedestalPurge = 35970, // AsuraImage->self, 4.0s cast, range 27 circle
     IconographyWheelOfDeincarnation = 35971, // Boss->self, 5.0s cast, range 8-40 donut
     WheelOfDeincarnation = 35972, // AsuraImage->self, 4.0s cast, range 15-96 donut
     IconographyBladewise = 35973, // Boss->self, 5.0s cast, range 50 width 6 rect
@@ -79,189 +79,198 @@ public enum IconID : uint
     Spreadmarker = 139, // player
 }
 
-class ArenaChange(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly AOEShapeDonut _donut = new(19, 20);
-    private AOEInstance? _aoe;
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.LowerRealm, 0.8f, new AOEShapeDonut(19, 20), false, T08Asura.DefaultBounds, 0x00020001, 0x01);
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+class CastAOEs(BossModule module) : Components.GenericAOEs(module)
+{
+    private static readonly Dictionary<AID, AOEShape> _shapes = new()
+    {
+        [AID.AsuriChakra] = new AOEShapeCircle(5),
+        [AID.Chakra1] = new AOEShapeDonut(6, 8),
+        [AID.Chakra2] = new AOEShapeDonut(9, 11),
+        [AID.Chakra3] = new AOEShapeDonut(12, 14),
+        [AID.Chakra4] = new AOEShapeDonut(15, 17),
+        [AID.Chakra5] = new AOEShapeDonut(18, 20),
+        [AID.IconographyPedestalPurge] = new AOEShapeCircle(10),
+        [AID.PedestalPurge] = new AOEShapeCircle(60),
+        [AID.IconographyWheelOfDeincarnation] = new AOEShapeDonut(8, 40),
+        [AID.WheelOfDeincarnation] = new AOEShapeDonut(48, 96),
+        [AID.IconographyBladewise] = new AOEShapeRect(50, 3),
+        [AID.Bladewise] = new AOEShapeRect(100, 14),
+        [AID.Scattering] = new AOEShapeRect(20, 3),
+    };
+    private readonly List<(Actor Caster, AOEShape Shape)> _casts = [];
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var (caster, shape) in _casts)
+            if (caster.CastInfo is { } cast)
+                yield return new(shape, cast.LocXZ, cast.Rotation, Module.CastFinishAt(cast));
+    }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.LowerRealm && Arena.Bounds.Radius > 19.25f)
-            _aoe = new(_donut, Arena.Center, default, Module.CastFinishAt(spell, 0.8f));
+        if (_shapes.TryGetValue((AID)spell.Action.ID, out var shape))
+            _casts.Add((caster, shape));
     }
 
-    public override void OnMapEffect(byte index, uint state)
+    public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if (index == 0x01 && state == 0x00020001)
+        if (_shapes.ContainsKey((AID)spell.Action.ID))
         {
-            Arena.Bounds = T08Asura.DefaultBounds;
-            _aoe = null;
+            ++NumCasts;
+            _casts.RemoveAll(c => c.Caster == caster);
         }
     }
 }
 
-class AsuriChakra(BossModule module) : Components.StandardAOEs(module, AID.AsuriChakra, new AOEShapeCircle(5));
-class Chakra1(BossModule module) : Components.StandardAOEs(module, AID.Chakra1, new AOEShapeDonut(6, 8));
-class Chakra2(BossModule module) : Components.StandardAOEs(module, AID.Chakra2, new AOEShapeDonut(9, 11));
-class Chakra3(BossModule module) : Components.StandardAOEs(module, AID.Chakra3, new AOEShapeDonut(12, 14));
-class Chakra4(BossModule module) : Components.StandardAOEs(module, AID.Chakra4, new AOEShapeDonut(15, 17));
-class Chakra5(BossModule module) : Components.StandardAOEs(module, AID.Chakra5, new AOEShapeDonut(18, 20));
-
-class Laceration(BossModule module) : Components.GenericAOEs(module)
+class Laceration(BossModule module) : Components.StandardAOEs(module, AID.Laceration, 9)
 {
-    private static readonly AOEShapeCircle circle = new(9);
-
-    private DateTime _activation;
+    private DateTime _early;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        foreach (var c in Module.Enemies(OID.PhantomAsura))
-            if (_activation != default)
-                yield return new(circle, c.Position, default, _activation);
+        if (Casters.Count > 0)
+            return base.ActiveAOEs(slot, actor);
+        if (_early == default)
+            return [];
+        return Module.Enemies(OID.PhantomAsura).Select(p => new AOEInstance(Shape, p.Position, default, _early));
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
         if (id == 0x11D6)
-            _activation = WorldState.FutureTime(5);
+            _early = WorldState.FutureTime(5);
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.Laceration)
-            _activation = default;
+        base.OnCastFinished(caster, spell);
+        if (spell.Action == WatchedAction && Casters.Count == 0)
+            _early = default;
     }
 }
 
 class ManyFaces(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone cone = new(20, 90.Degrees());
+    private static readonly AOEShapeCone _half = new(20, 90.Degrees());
+    private Angle? _wrathDirection;
+    private Angle? _delightDirection;
+    private bool _wrathChosen;
+    private bool _delightChosen;
     private DateTime _activation;
-    private bool delight;
-    private bool wrath;
-    private Angle _rotationWrath;
-    private Angle _rotationDelight;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (delight)
-            yield return new(cone, Module.Center, _rotationDelight, _activation);
-        if (wrath)
-            yield return new(cone, Module.Center, _rotationWrath, _activation);
+        if (_wrathChosen && _wrathDirection is { } wrath)
+            yield return new(_half, Module.Center, wrath, _activation);
+        if (_delightChosen && _delightDirection is { } delight)
+            yield return new(_half, Module.Center, delight, _activation);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is AID.TheFaceOfWrathA or AID.TheFaceOfWrathB)
-            delight = true;
-        if ((AID)spell.Action.ID is AID.TheFaceOfDelightA or AID.TheFaceOfDelightB)
-            wrath = true;
-        if ((AID)spell.Action.ID == AID.FaceMechanicWrath)
+        switch ((AID)spell.Action.ID)
         {
-            _activation = Module.CastFinishAt(spell);
-            _rotationDelight = spell.Rotation;
-        }
-        if ((AID)spell.Action.ID == AID.FaceMechanicDelight)
-        {
-            _activation = Module.CastFinishAt(spell);
-            _rotationWrath = spell.Rotation;
+            case AID.TheFaceOfWrathA:
+            case AID.TheFaceOfWrathB:
+                _wrathChosen = true;
+                break;
+            case AID.TheFaceOfDelightA:
+            case AID.TheFaceOfDelightB:
+                _delightChosen = true;
+                break;
+            case AID.FaceMechanicWrath:
+                _wrathDirection = spell.Rotation;
+                _activation = Module.CastFinishAt(spell);
+                break;
+            case AID.FaceMechanicDelight:
+                _delightDirection = spell.Rotation;
+                _activation = Module.CastFinishAt(spell);
+                break;
         }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is AID.TheFaceOfDelightSnapshot or AID.TheFaceOfWrathSnapshot)
-        {
-            delight = false;
-            wrath = false;
-        }
+        if ((AID)spell.Action.ID is not (AID.TheFaceOfWrathSnapshot or AID.TheFaceOfDelightSnapshot))
+            return;
+        ++NumCasts;
+        _wrathChosen = _delightChosen = false;
+        _wrathDirection = _delightDirection = null;
     }
 }
 
 class MyriadAspects(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone cone = new(40, 15.Degrees());
-    private DateTime _activation1;
-    private DateTime _activation2;
-    private readonly List<ActorCastInfo> _spell1 = [];
-    private readonly List<ActorCastInfo> _spell2 = [];
+    private static readonly AOEShapeCone _wedge = new(40, 15.Degrees());
+    private readonly List<Actor> _casters = [];
 
+    // only the wave resolving next
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (NumCasts < 6 && _spell1.Count > 0)
-            foreach (var c in _spell1)
-                yield return new(cone, Module.Center, c.Rotation, _activation1);
-        if (NumCasts >= 6 && _spell2.Count > 0)
-            foreach (var c in _spell2)
-                yield return new(cone, Module.Center, c.Rotation, _activation2);
+        var next = DateTime.MaxValue;
+        foreach (var c in _casters)
+            if (c.CastInfo is { } cast && Module.CastFinishAt(cast) is var at && at < next)
+                next = at;
+
+        foreach (var c in _casters)
+            if (c.CastInfo is { } cast && Module.CastFinishAt(cast) is var at && at <= next.AddSeconds(1))
+                yield return new(_wedge, Module.Center, cast.Rotation, at);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID == AID.MyriadAspects1)
-        {
-            _activation1 = Module.CastFinishAt(spell);
-            _spell1.Add(spell);
-        }
-        if ((AID)spell.Action.ID == AID.MyriadAspects2)
-        {
-            _activation2 = Module.CastFinishAt(spell);
-            _spell2.Add(spell);
-        }
+        if ((AID)spell.Action.ID is AID.MyriadAspects1 or AID.MyriadAspects2)
+            _casters.Add(caster);
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID is AID.MyriadAspects1 or AID.MyriadAspects2)
-            ++NumCasts;
-        if (NumCasts == 12)
         {
-            NumCasts = 0;
-            _spell1.Clear();
-            _spell2.Clear();
+            ++NumCasts;
+            _casters.Remove(caster);
         }
     }
 }
 
 class SixBladedKhadga(BossModule module) : Components.GenericAOEs(module)
 {
-    private readonly List<ActorCastInfo> _spell = [];
-    private DateTime _start;
-    private static readonly AOEShapeCone Cone = new(20, 90.Degrees());
+    private static readonly AOEShapeCone _blade = new(20, 90.Degrees());
+    private const float _interval = 2;
+    private const int _maxShown = 2;
+    private readonly Queue<Angle> _blades = new();
+    private DateTime _next;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        if (_spell.Count > 0)
-            yield return new(Cone, Module.PrimaryActor.Position, _spell[0].Rotation, _start, ArenaColor.Danger);
-        if (_spell.Count > 1)
-            yield return new(Cone, Module.PrimaryActor.Position, _spell[1].Rotation, _start.AddSeconds(2));
+        var index = 0;
+        foreach (var direction in _blades)
+        {
+            if (index == _maxShown)
+                yield break;
+            yield return new(_blade, Module.PrimaryActor.Position, direction, _next.AddSeconds(_interval * index), index == 0 ? ArenaColor.Danger : 0);
+            ++index;
+        }
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is AID.KhadgaTelegraph1 or AID.KhadgaTelegraph2 or AID.KhadgaTelegraph3)
-        {
-            _spell.Add(spell);
-            if (_start == default)
-                _start = WorldState.FutureTime(12.9f);
-        }
+        if ((AID)spell.Action.ID is not (AID.KhadgaTelegraph1 or AID.KhadgaTelegraph2 or AID.KhadgaTelegraph3))
+            return;
+        if (_blades.Count == 0)
+            _next = WorldState.FutureTime(12.9f);
+        _blades.Enqueue(spell.Rotation);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is AID.Khadga1 or AID.Khadga2 or AID.Khadga3 or AID.Khadga4 or AID.Khadga5 or AID.Khadga6)
-        {
-            ++NumCasts;
-            _spell.RemoveAt(0);
-            _start.AddSeconds(2);
-            if (NumCasts == 6)
-            {
-                NumCasts = 0;
-                _start = default;
-            }
-        }
+        if ((AID)spell.Action.ID is not (AID.Khadga1 or AID.Khadga2 or AID.Khadga3 or AID.Khadga4 or AID.Khadga5 or AID.Khadga6))
+            return;
+        ++NumCasts;
+        _blades.TryDequeue(out _);
+        _next = WorldState.FutureTime(_interval);
     }
 }
 
@@ -269,13 +278,6 @@ class LowerRealm(BossModule module) : Components.RaidwideCast(module, AID.LowerR
 class Ephemerality(BossModule module) : Components.RaidwideCast(module, AID.Ephemerality);
 class CuttingJewel(BossModule module) : Components.BaitAwayCast(module, AID.CuttingJewel, new AOEShapeCircle(4), true);
 class CuttingJewelHint(BossModule module) : Components.SingleTargetCast(module, AID.CuttingJewel);
-class IconographyPedestalPurge(BossModule module) : Components.StandardAOEs(module, AID.IconographyPedestalPurge, 10);
-class PedestalPurge(BossModule module) : Components.StandardAOEs(module, AID.PedestalPurge, 60);
-class IconographyWheelOfDeincarnation(BossModule module) : Components.StandardAOEs(module, AID.IconographyWheelOfDeincarnation, new AOEShapeDonut(8, 40));
-class WheelOfDeincarnation(BossModule module) : Components.StandardAOEs(module, AID.WheelOfDeincarnation, new AOEShapeDonut(48, 96));
-class IconographyBladewise(BossModule module) : Components.StandardAOEs(module, AID.IconographyBladewise, new AOEShapeRect(50, 3));
-class Bladewise(BossModule module) : Components.StandardAOEs(module, AID.Bladewise, new AOEShapeRect(100, 14));
-class Scattering(BossModule module) : Components.StandardAOEs(module, AID.Scattering, new AOEShapeRect(20, 3));
 class OrderedChaos(BossModule module) : Components.SpreadFromCastTargets(module, AID.OrderedChaos, 5);
 
 class T08AsuraStates : StateMachineBuilder
@@ -283,33 +285,21 @@ class T08AsuraStates : StateMachineBuilder
     public T08AsuraStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaChange>()
-            .ActivateOnEnter<Ephemerality>()
+            .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<LowerRealm>()
-            .ActivateOnEnter<AsuriChakra>()
-            .ActivateOnEnter<Chakra1>()
-            .ActivateOnEnter<Chakra2>()
-            .ActivateOnEnter<Chakra3>()
-            .ActivateOnEnter<Chakra4>()
-            .ActivateOnEnter<Chakra5>()
+            .ActivateOnEnter<Ephemerality>()
             .ActivateOnEnter<CuttingJewel>()
             .ActivateOnEnter<CuttingJewelHint>()
-            .ActivateOnEnter<Laceration>()
-            .ActivateOnEnter<IconographyPedestalPurge>()
-            .ActivateOnEnter<PedestalPurge>()
-            .ActivateOnEnter<IconographyWheelOfDeincarnation>()
-            .ActivateOnEnter<WheelOfDeincarnation>()
-            .ActivateOnEnter<IconographyBladewise>()
-            .ActivateOnEnter<Bladewise>()
-            .ActivateOnEnter<SixBladedKhadga>()
-            .ActivateOnEnter<MyriadAspects>()
-            .ActivateOnEnter<Scattering>()
             .ActivateOnEnter<OrderedChaos>()
-            .ActivateOnEnter<ManyFaces>();
+            .ActivateOnEnter<CastAOEs>()
+            .ActivateOnEnter<SixBladedKhadga>()
+            .ActivateOnEnter<ManyFaces>()
+            .ActivateOnEnter<MyriadAspects>()
+            .ActivateOnEnter<Laceration>();
     }
 }
 
-[ModuleInfo(Incomplete = true, Contributors = "Malediktus, Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 944, NameID = 12351)]
+[ModuleInfo(Incomplete = true, Contributors = "Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 944, NameID = 12351)]
 public class T08Asura(ModuleInit init) : BossModule(init, new(100, 100), new ArenaBoundsCircle(19.5f))
 {
     public static readonly ArenaBoundsCircle DefaultBounds = new(19);
