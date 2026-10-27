@@ -348,7 +348,6 @@ class InfernWellPull(BossModule module) : Components.Knockback(module, AID.Infer
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        // blast radius + pull distance
         if (_source is { } s && !IsImmune(slot, s.Activation))
             hints.AddForbiddenZone(ShapeDistance.Circle(s.Origin, 23), s.Activation);
     }

@@ -68,7 +68,6 @@ class LoomingNightmare(BossModule module) : Components.StandardChasingAOEs(modul
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        // note: first two chases had 5 puddles, later ones 4
         if (spell.Action == ActionFirst && ++_numChases > 2)
             MaxCasts = 4;
         base.OnCastStarted(caster, spell);

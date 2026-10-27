@@ -86,7 +86,6 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
         };
         if (offset == default)
             return;
-        // origins are on whole coordinates
         var pos = actor.Position + offset;
         _aoes.Add(new(new AOEShapeRect(50, 25), new(MathF.Round(pos.X), MathF.Round(pos.Z)), dir, WorldState.FutureTime(16.6f)));
     }

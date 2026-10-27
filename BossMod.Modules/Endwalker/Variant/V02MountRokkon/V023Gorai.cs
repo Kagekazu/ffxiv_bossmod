@@ -96,7 +96,7 @@ class ArenaChange(BossModule module) : Components.GenericAOEs(module)
 
 class OctagonGaps(BossModule module) : Components.GenericAOEs(module)
 {
-    private BitMask _raised; // NW, NE, SW, SE
+    private BitMask _raised;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _raised.SetBits().Select(q => new AOEInstance(new AOEShapeDonut(7.3f, 9.7f), Module.Center + new WDir((q & 1) == 0 ? -10 : 10, q < 2 ? -10 : 10)));
 
@@ -179,7 +179,6 @@ class MalformedPrayer(BossModule module) : Components.GenericTowers(module)
             base.AddAIHints(slot, actor, assignment, hints);
     }
 
-    // only the oldest tower is soakable
     private void UpdateSoakers()
     {
         for (var i = 0; i < Towers.Count; ++i)

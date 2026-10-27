@@ -281,7 +281,6 @@ class IceBloomCross(BossModule module) : Components.GenericAOEs(module, AID.IceB
     {
         foreach (var s in _stars.Take(3))
         {
-            // diagonal cross resolves first
             if (s.CrossesLeft > 1)
                 yield return new(new AOEShapeCross(40, 2.5f), s.Center, 45.Degrees(), s.Activation);
             yield return new(new AOEShapeCross(40, 2.5f), s.Center, default, s.Activation);

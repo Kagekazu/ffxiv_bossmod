@@ -243,11 +243,9 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.OnceOnRokujo:
-                // ~1s between links
                 Chain(caster, spell, 8, 1, 1, false);
                 break;
             case AID.TwiceOnRokujo:
-                // everything after the first wave goes off together
                 Chain(caster, spell, 12, 1.6f, 1.5f, true);
                 break;
             case AID.ThriceOnRokujoVisual1:
@@ -268,7 +266,6 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         }
     }
 
-    // clouds hit by the line explode, setting off every other cloud in range on the next link
     private void Chain(Actor caster, ActorCastInfo spell, float radius, float firstDelay, float linkDelay, bool linksTogether)
     {
         var wave = _clouds.Where(c => c.Position.InRect(caster.Position, spell.Rotation.ToDirection(), 30, 30, 7)).ToList();

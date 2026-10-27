@@ -221,7 +221,6 @@ class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOESha
     {
         if (index != 0x0A)
             return;
-        // z of the east boulder (rolling west) and the west boulder (rolling east)
         (float, float)? lanes = state switch
         {
             0x00020001 => (-15, 5),
@@ -241,7 +240,6 @@ class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOESha
     {
         if ((AID)spell.Action.ID != AID.RollingBoulder)
             return;
-        // hits are centered on the helper, rect starts 5y north of it
         var pos = caster.Position - new WDir(0, 5);
         var index = Lines.FindIndex(l => l.Next.AlmostEqual(pos, 1));
         if (index < 0)
@@ -367,7 +365,6 @@ class V011GeryonTheSteerStates : StateMachineBuilder
     public V011GeryonTheSteerStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // note: Intake and RunawayRunoff look up PowderKegs on creation
             .ActivateOnEnter<PowderKegs>()
             .ActivateOnEnter<Intake>()
             .ActivateOnEnter<RunawaySludge>()

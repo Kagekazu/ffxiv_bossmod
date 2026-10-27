@@ -91,7 +91,7 @@ class DarkEruptionSpread(BossModule module) : Components.UniformStackSpread(modu
             return;
         switch ((AID)spell.Action.ID)
         {
-            case AID.DarkEruption: // location-targeted, so match the closest marked player
+            case AID.DarkEruption:
                 Spreads.Remove(Spreads.MinBy(s => (s.Target.Position - spell.TargetXZ).LengthSq()));
                 break;
             case AID.NetherBlast:
@@ -209,7 +209,6 @@ class DoomTowers(BossModule module) : Components.GenericTowers(module)
 
 class NetherBlast(BossModule module) : Components.BaitAwayTethers(module, new AOEShapeCircle(6), (uint)TetherID.NetherBlast, AID.NetherBlast, centerAtTarget: true)
 {
-    // dead targets don't always get an untether
     public override void Update() => CurrentBaits.RemoveAll(b => b.Target.IsDead);
 }
 

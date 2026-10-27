@@ -315,7 +315,6 @@ class V021YozakuraStates : StateMachineBuilder
             .ActivateOnEnter<RootArrangement>()
             .ActivateOnEnter<AccursedSeedling>()
             .ActivateOnEnter<Witherwind>()
-            // note: DriftingPetals looks up Mudrain and Witherwind on creation
             .ActivateOnEnter<WindblossomWhirl>()
             .ActivateOnEnter<LevinblossomStrike>()
             .ActivateOnEnter<Mudrain>()

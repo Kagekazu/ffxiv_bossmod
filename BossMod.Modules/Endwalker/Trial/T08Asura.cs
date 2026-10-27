@@ -101,48 +101,19 @@ class ArenaChange(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-class CastAOEs(BossModule module) : Components.GenericAOEs(module)
-{
-    private static readonly Dictionary<AID, AOEShape> _shapes = new()
-    {
-        [AID.AsuriChakra] = new AOEShapeCircle(5),
-        [AID.Chakra1] = new AOEShapeDonut(6, 8),
-        [AID.Chakra2] = new AOEShapeDonut(9, 11),
-        [AID.Chakra3] = new AOEShapeDonut(12, 14),
-        [AID.Chakra4] = new AOEShapeDonut(15, 17),
-        [AID.Chakra5] = new AOEShapeDonut(18, 20),
-        [AID.IconographyPedestalPurge] = new AOEShapeCircle(10),
-        [AID.PedestalPurge] = new AOEShapeCircle(60),
-        [AID.IconographyWheelOfDeincarnation] = new AOEShapeDonut(8, 40),
-        [AID.WheelOfDeincarnation] = new AOEShapeDonut(48, 96),
-        [AID.IconographyBladewise] = new AOEShapeRect(50, 3),
-        [AID.Bladewise] = new AOEShapeRect(100, 14),
-        [AID.Scattering] = new AOEShapeRect(20, 3),
-    };
-    private readonly List<(Actor Caster, AOEShape Shape)> _casts = [];
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        foreach (var (caster, shape) in _casts)
-            if (caster.CastInfo is { } cast)
-                yield return new(shape, cast.LocXZ, cast.Rotation, Module.CastFinishAt(cast));
-    }
-
-    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
-    {
-        if (_shapes.TryGetValue((AID)spell.Action.ID, out var shape))
-            _casts.Add((caster, shape));
-    }
-
-    public override void OnCastFinished(Actor caster, ActorCastInfo spell)
-    {
-        if (_shapes.ContainsKey((AID)spell.Action.ID))
-        {
-            ++NumCasts;
-            _casts.RemoveAll(c => c.Caster == caster);
-        }
-    }
-}
+class AsuriChakra(BossModule module) : Components.StandardAOEs(module, AID.AsuriChakra, 5);
+class Chakra1(BossModule module) : Components.StandardAOEs(module, AID.Chakra1, new AOEShapeDonut(6, 8));
+class Chakra2(BossModule module) : Components.StandardAOEs(module, AID.Chakra2, new AOEShapeDonut(9, 11));
+class Chakra3(BossModule module) : Components.StandardAOEs(module, AID.Chakra3, new AOEShapeDonut(12, 14));
+class Chakra4(BossModule module) : Components.StandardAOEs(module, AID.Chakra4, new AOEShapeDonut(15, 17));
+class Chakra5(BossModule module) : Components.StandardAOEs(module, AID.Chakra5, new AOEShapeDonut(18, 20));
+class IconographyPedestalPurge(BossModule module) : Components.StandardAOEs(module, AID.IconographyPedestalPurge, 10);
+class PedestalPurge(BossModule module) : Components.StandardAOEs(module, AID.PedestalPurge, 60);
+class IconographyWheelOfDeincarnation(BossModule module) : Components.StandardAOEs(module, AID.IconographyWheelOfDeincarnation, new AOEShapeDonut(8, 40));
+class WheelOfDeincarnation(BossModule module) : Components.StandardAOEs(module, AID.WheelOfDeincarnation, new AOEShapeDonut(48, 96));
+class IconographyBladewise(BossModule module) : Components.StandardAOEs(module, AID.IconographyBladewise, new AOEShapeRect(50, 3));
+class Bladewise(BossModule module) : Components.StandardAOEs(module, AID.Bladewise, new AOEShapeRect(100, 14));
+class Scattering(BossModule module) : Components.StandardAOEs(module, AID.Scattering, new AOEShapeRect(20, 3));
 
 class Laceration(BossModule module) : Components.StandardAOEs(module, AID.Laceration, 9)
 {
@@ -224,7 +195,6 @@ class MyriadAspects(BossModule module) : Components.GenericAOEs(module)
 {
     private readonly List<Actor> _casters = [];
 
-    // only the wave resolving next
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         var next = DateTime.MaxValue;
@@ -306,7 +276,19 @@ class T08AsuraStates : StateMachineBuilder
             .ActivateOnEnter<CuttingJewel>()
             .ActivateOnEnter<CuttingJewelHint>()
             .ActivateOnEnter<OrderedChaos>()
-            .ActivateOnEnter<CastAOEs>()
+            .ActivateOnEnter<AsuriChakra>()
+            .ActivateOnEnter<Chakra1>()
+            .ActivateOnEnter<Chakra2>()
+            .ActivateOnEnter<Chakra3>()
+            .ActivateOnEnter<Chakra4>()
+            .ActivateOnEnter<Chakra5>()
+            .ActivateOnEnter<IconographyPedestalPurge>()
+            .ActivateOnEnter<PedestalPurge>()
+            .ActivateOnEnter<IconographyWheelOfDeincarnation>()
+            .ActivateOnEnter<WheelOfDeincarnation>()
+            .ActivateOnEnter<IconographyBladewise>()
+            .ActivateOnEnter<Bladewise>()
+            .ActivateOnEnter<Scattering>()
             .ActivateOnEnter<SixBladedKhadga>()
             .ActivateOnEnter<ManyFaces>()
             .ActivateOnEnter<MyriadAspects>()

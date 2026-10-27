@@ -279,7 +279,6 @@ class SwordOfLight(BossModule module) : Components.GenericAOEs(module, AID.Shini
 
     public override void OnMapEffect(byte index, uint state)
     {
-        // N, E, S, W edge, each facing into the arena
         if (index is >= 0x14 and <= 0x17 && state == 0x00020001)
         {
             var facing = (-90 * (index - 0x14)).Degrees();

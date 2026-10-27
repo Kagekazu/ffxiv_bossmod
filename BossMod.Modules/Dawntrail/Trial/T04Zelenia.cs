@@ -130,7 +130,6 @@ class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
                 _puddles.Add((caster.Position, 0));
                 break;
             case AID.Shock6:
-                // each puddle goes through Shock1-6 twice
                 ++NumCasts;
                 if (_puddles.Count == 0)
                     break;
@@ -224,7 +223,6 @@ class CenterVoid(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// tile k is driven by map effect 4+k and faces 180+60k degrees
 class RoseTiles(BossModule module) : BossComponent(module)
 {
     public const int NumTiles = 6;
@@ -266,7 +264,6 @@ class RoseTiles(BossModule module) : BossComponent(module)
         return group;
     }
 
-    // spawn rotations seen in logs
     private static int TileFromSpawnRotation(Angle rotation) => (int)MathF.Round(rotation.Deg) switch
     {
         180 or 143 or -143 => 0,

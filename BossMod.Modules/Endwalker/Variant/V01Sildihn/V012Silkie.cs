@@ -125,7 +125,7 @@ class EasternEwers(BossModule module) : Components.Exaflare(module, 4)
         AdvanceLine(line, caster.Position);
         if (line.ExplosionsLeft == 0)
             Lines.RemoveAt(index);
-        else if (line.Next.Z > -135) // stream piles up at the south wall
+        else if (line.Next.Z > -135)
             line.Next = new(line.Next.X, -135);
     }
 
