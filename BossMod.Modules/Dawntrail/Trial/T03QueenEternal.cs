@@ -209,6 +209,7 @@ class Besiegement(BossModule module) : Components.GenericAOEs(module)
         if (index != 3)
             return;
 
+        // note: second layout swaps the A/B lanes and ignores C/D
         var second = _layoutsSeen == 1;
         var lanes = state switch
         {
@@ -349,6 +350,7 @@ class WaltzMarkers(BossModule module) : Components.GenericAOEs(module)
         if ((AID)spell.Action.ID != AID.WaltzOfTheRegaliaVisual)
             return;
 
+        // visual is cast by a separate actor standing on the marker
         foreach (var id in _markers.Keys)
         {
             if (WorldState.Actors.Find(id) is { } marker && marker.Position.AlmostEqual(caster.Position, 0.5f))

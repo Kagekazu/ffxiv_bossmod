@@ -1,5 +1,6 @@
 namespace BossMod.Endwalker;
 
+// arena rim turning into a deathwall during an early cast; bounds change on the given map effect
 abstract class OuterDeathwall(BossModule module, Enum trigger, float delay, AOEShape warning, bool safeInside, ArenaBounds shrunk, uint mapState, params byte[] mapIndices)
     : Components.GenericAOEs(module, trigger)
 {
@@ -32,6 +33,7 @@ abstract class OuterDeathwall(BossModule module, Enum trigger, float delay, AOES
     }
 }
 
+// circle followed by expanding rings; ring N is cast with action id 'first' + N
 class ExpandingRings(BossModule module, Enum first, params AOEShape[] rings) : Components.ConcentricAOEs(module, rings)
 {
     private readonly uint _firstId = (uint)(object)first;

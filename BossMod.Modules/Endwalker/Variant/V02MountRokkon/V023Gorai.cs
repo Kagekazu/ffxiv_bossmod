@@ -95,6 +95,7 @@ class OctagonGaps(BossModule module) : Components.GenericAOEs(module)
         _raised[quadrant] = state == 0x00200010;
     }
 
+    // NW, NE, SW, SE
     private WPos QuadrantCenter(int quadrant)
         => Module.Center + new WDir((quadrant & 1) == 0 ? -_quadrantOffset : _quadrantOffset, quadrant < 2 ? -_quadrantOffset : _quadrantOffset);
 }
