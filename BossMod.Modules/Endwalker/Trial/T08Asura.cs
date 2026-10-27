@@ -79,7 +79,6 @@ public enum IconID : uint
     Spreadmarker = 139, // player
 }
 
-// the opening raidwide trims the outer half-yalm of the arena
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.LowerRealm, 0.8f, new AOEShapeDonut(19, 20), false, T08Asura.DefaultBounds, 0x00020001, 0x01);
 
 class AsuriChakra(BossModule module) : Components.StandardAOEs(module, AID.AsuriChakra, new AOEShapeCircle(5));

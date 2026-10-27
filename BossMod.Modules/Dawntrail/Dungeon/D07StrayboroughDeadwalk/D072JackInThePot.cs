@@ -33,17 +33,15 @@ public enum SID : uint
     AreaOfInfluenceUp = 1909, // none->Helper, extra=0x1..0x4
 }
 
-// each pour leaves a lingering puddle (marked by the first area-of-influence stack on its helper);
-// puddles go away in the order they appeared, whenever a samovar plays its finishing animation
 class PipingPour(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Puddle = new(8);
+    private static readonly AOEShapeCircle _puddle = new(8);
     private readonly Queue<WPos> _puddles = new();
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var p in _puddles)
-            yield return new(Puddle, p);
+            yield return new(_puddle, p);
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)

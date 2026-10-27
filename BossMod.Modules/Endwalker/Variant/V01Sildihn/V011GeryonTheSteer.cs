@@ -1,4 +1,4 @@
-﻿namespace BossMod.Endwalker.Variant.V01Sildihn.V011GeryonTheSteer;
+namespace BossMod.Endwalker.Variant.V01Sildihn.V011GeryonTheSteer;
 
 public enum OID : uint
 {
@@ -215,13 +215,11 @@ class SuddenlySewage(BossModule module) : Components.GenericAOEs(module, AID.Sud
     }
 }
 
-// two boulders roll across in opposite directions, 10y per step; map effect 0x0A picks the lane (z) of each:
-// the east one starts at x=15 rolling west, the west one at x=-15 rolling east
 class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOEShapeRect(10, 5))
 {
-    private static readonly WDir HalfLane = new(0, 5); // each 10x10 hit is centered on the helper, the rect starts half a lane north of it
-    private const float StepLength = 10;
-    private const int Steps = 4;
+    private static readonly WDir _halfLane = new(0, 5); // hits are centered on the helper
+    private const float _stepLength = 10;
+    private const int _steps = 4;
 
     public override void OnMapEffect(byte index, uint state)
     {
@@ -246,7 +244,7 @@ class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOESha
     {
         if ((AID)spell.Action.ID != AID.RollingBoulder)
             return;
-        var hit = caster.Position - HalfLane;
+        var hit = caster.Position - _halfLane;
         var line = Lines.MinBy(l => (l.Next - hit).LengthSq());
         if (line == null || !line.Next.AlmostEqual(hit, 1))
             return;
@@ -258,12 +256,12 @@ class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOESha
 
     private void Roll(WPos start, int directionX, DateTime activation) => Lines.Add(new()
     {
-        Next = start - HalfLane,
-        Advance = new(StepLength * directionX, 0),
+        Next = start - _halfLane,
+        Advance = new(_stepLength * directionX, 0),
         NextExplosion = activation,
         TimeToMove = 0.3f,
-        ExplosionsLeft = Steps,
-        MaxShownExplosions = Steps,
+        ExplosionsLeft = _steps,
+        MaxShownExplosions = _steps,
     });
 }
 
@@ -381,16 +379,14 @@ class V011GeryonTheSteerStates : StateMachineBuilder
     public V011GeryonTheSteerStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // PowderKegs first: Intake and RunawayRunoff look it up on creation
+            // note: Intake and RunawayRunoff look up PowderKegs on creation
             .ActivateOnEnter<PowderKegs>()
-            // route mechanics
             .ActivateOnEnter<Intake>()
             .ActivateOnEnter<RunawaySludge>()
             .ActivateOnEnter<RunawayRunoff>()
             .ActivateOnEnter<SuddenlySewage>()
             .ActivateOnEnter<RollingBoulder>()
             .ActivateOnEnter<Shockwave>()
-            // boss
             .ActivateOnEnter<ArenaChanges>()
             .ActivateOnEnter<Gigantomill>()
             .ActivateOnEnter<ColossalChargeLeft>()

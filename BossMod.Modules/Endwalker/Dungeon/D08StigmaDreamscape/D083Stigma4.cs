@@ -62,7 +62,6 @@ class D083Stigma4States : StateMachineBuilder
             .ActivateOnEnter<MindhackMarch>()
             .ActivateOnEnter<ElectromagneticReleaseOut>()
             .ActivateOnEnter<ElectromagneticReleaseIn>()
-            // adds
             .ActivateOnEnter<OmegaFrame>()
             .ActivateOnEnter<SelfDestructOmega>()
             .ActivateOnEnter<ProtoWaveCannon>()

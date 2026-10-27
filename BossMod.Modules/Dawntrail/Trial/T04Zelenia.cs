@@ -83,11 +83,10 @@ public enum IconID : uint
     StockBreak = 590, // player
 }
 
-// in/out from the boss's position; when several are queued, only the ones resolving next are drawn
 class AlexandrianThunderIV(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle In = new(8);
-    private static readonly AOEShapeDonut Out = new(8, 24);
+    private static readonly AOEShapeCircle _in = new(8);
+    private static readonly AOEShapeDonut _out = new(8, 24);
     private readonly List<(Actor Caster, AOEShape Shape)> _casts = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
@@ -126,25 +125,24 @@ class AlexandrianThunderIV(BossModule module) : Components.GenericAOEs(module)
 
     private static AOEShape? ShapeFor(ActionID action) => (AID)action.ID switch
     {
-        AID.AlexandrianThunderIVCircle1 or AID.AlexandrianThunderIVCircle2 => In,
-        AID.AlexandrianThunderIVDonut1 or AID.AlexandrianThunderIVDonut2 => Out,
+        AID.AlexandrianThunderIVCircle1 or AID.AlexandrianThunderIVCircle2 => _in,
+        AID.AlexandrianThunderIVDonut1 or AID.AlexandrianThunderIVDonut2 => _out,
         _ => null
     };
 }
 
-// circles are baited on the marked players, then lock in place and pulse
 class ShockBait(BossModule module) : Components.BaitAwayIcon(module, new AOEShapeCircle(4), (uint)IconID.Shock, AID.ShockLock, 8, centerAtTarget: true);
 
 class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Shape = new(4);
-    private const int CyclesPerPuddle = 2; // every puddle goes through the Shock1-6 sequence twice
+    private static readonly AOEShapeCircle _shape = new(4);
+    private const int _cyclesPerPuddle = 2; // each puddle goes through Shock1-6 twice
     private readonly List<(WPos Origin, int Cycles)> _puddles = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var p in _puddles)
-            yield return new(Shape, p.Origin);
+            yield return new(_shape, p.Origin);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -166,7 +164,7 @@ class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
         if (_puddles.Count == 0)
             return;
 
-        // match by position; if a helper is somewhere else, credit the puddle that is furthest behind
+        // fall back to the puddle that is furthest behind
         var index = _puddles.FindIndex(p => p.Origin.AlmostEqual(pos, 1));
         if (index < 0)
         {
@@ -177,7 +175,7 @@ class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
         }
 
         var (origin, cycles) = _puddles[index];
-        if (++cycles >= CyclesPerPuddle)
+        if (++cycles >= _cyclesPerPuddle)
             _puddles.RemoveAt(index);
         else
             _puddles[index] = (origin, cycles);
@@ -189,7 +187,6 @@ class HolyHazard(BossModule module) : Components.StandardAOEs(module, AID.HolyHa
 class SpecterOfTheLost(BossModule module) : Components.BaitAwayCast(module, AID.SpecterOfTheLost, new AOEShapeCone(50, 22.5f.Degrees()));
 class ThunderSlash(BossModule module) : Components.StandardAOEs(module, AID.ThunderSlash, new AOEShapeCone(24, 30.Degrees()), maxCasts: 4);
 
-// ignores knockback immunity: the only way to survive is to stand close enough to the middle that the push doesn't reach the edge
 class RosebloodBloom(BossModule module) : Components.KnockbackFromCastTarget(module, AID.RosebloodBloom, 10, ignoreImmunes: true)
 {
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
@@ -205,10 +202,9 @@ class PerfumedQuietus(BossModule module) : Components.RaidwideCast(module, AID.R
 class ThornedCatharsis(BossModule module) : Components.RaidwideCast(module, AID.ThornedCatharsis);
 class ValorousAscension(BossModule module) : Components.RaidwideMultiHit(module, AID.ValorousAscension1, [AID.ValorousAscension1, AID.ValorousAscension2, AID.ValorousAscension3], 0, 0.95f, 3);
 
-// one stack marker, hit four times in a row
 class StockBreak(BossModule module) : Components.UniformStackSpread(module, 6, 0, 8, 8, stackHits: 4)
 {
-    private static readonly AID[] HitOrder = [AID.StockBreak1, AID.StockBreak2, AID.StockBreak3, AID.StockBreak4];
+    private static readonly AID[] _hitOrder = [AID.StockBreak1, AID.StockBreak2, AID.StockBreak3, AID.StockBreak4];
 
     public override void OnEventIcon(Actor actor, uint iconID, ulong targetID)
     {
@@ -218,11 +214,11 @@ class StockBreak(BossModule module) : Components.UniformStackSpread(module, 6, 0
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        var hit = Array.IndexOf(HitOrder, (AID)spell.Action.ID);
+        var hit = Array.IndexOf(_hitOrder, (AID)spell.Action.ID);
         if (hit < 0)
             return;
 
-        var hitsLeft = HitOrder.Length - 1 - hit;
+        var hitsLeft = _hitOrder.Length - 1 - hit;
         if (hitsLeft == 0)
         {
             Stacks.Clear();
@@ -239,16 +235,15 @@ class StockBreak(BossModule module) : Components.UniformStackSpread(module, 6, 0
     }
 }
 
-// Queen's Crusade telegraphs a hole in the middle; the map effect swaps the arena to a donut and later back again
 class CenterVoid(BossModule module) : Components.GenericAOEs(module, AID.QueensCrusade)
 {
-    private static readonly AOEShapeCircle Hole = new(4);
+    private static readonly AOEShapeCircle _hole = new(4);
     private DateTime _telegraph;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (_telegraph != default)
-            yield return new(Hole, Arena.Center, Activation: _telegraph);
+            yield return new(_hole, Arena.Center, Activation: _telegraph);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -274,8 +269,7 @@ class CenterVoid(BossModule module) : Components.GenericAOEs(module, AID.QueensC
     }
 }
 
-// the arena is split into six 60-degree slices that light up with roses;
-// slice k is driven by map effect index 4+k and faces 180+60k degrees from the center
+// tile k is driven by map effect 4+k and faces 180+60k degrees
 class RoseTiles(BossModule module) : BossComponent(module)
 {
     public const int NumTiles = 6;
@@ -303,7 +297,6 @@ class RoseTiles(BossModule module) : BossComponent(module)
             Lit.Set(tile);
     }
 
-    // lit slices touching the given one, walking around the ring in both directions
     public BitMask ConnectedTo(int tile)
     {
         var group = new BitMask();
@@ -318,7 +311,7 @@ class RoseTiles(BossModule module) : BossComponent(module)
         return group;
     }
 
-    // the rose actors spawn with one of three facings per slice (values from logs)
+    // spawn rotations seen in logs
     private static int TileFromSpawnRotation(Angle rotation) => (int)MathF.Round(rotation.Deg) switch
     {
         180 or 143 or -143 => 0,
@@ -331,11 +324,9 @@ class RoseTiles(BossModule module) : BossComponent(module)
     };
 }
 
-// each strike hits its landing spot plus every lit slice it touches (and the slices connected to those);
-// the second in/out of the fight instead electrifies all lit slices at once
 class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Strike = new(4);
+    private static readonly AOEShapeCircle _strike = new(4);
     private RoseTiles? _tiles;
     private readonly List<(ulong Caster, WPos Target, BitMask Tiles, DateTime Activation)> _strikes = [];
     private DateTime _surge;
@@ -346,7 +337,7 @@ class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
         var tileActivation = new DateTime[RoseTiles.NumTiles];
         foreach (var s in _strikes)
         {
-            yield return new(Strike, s.Target, default, s.Activation);
+            yield return new(_strike, s.Target, default, s.Activation);
             foreach (var t in s.Tiles.SetBits())
                 if (tileActivation[t] == default || s.Activation < tileActivation[t])
                     tileActivation[t] = s.Activation;
@@ -406,23 +397,22 @@ class AlexandrianThunderIII(BossModule module) : Components.GenericAOEs(module)
         if (_tiles == null)
             return hit;
         for (var t = 0; t < RoseTiles.NumTiles; ++t)
-            if (_tiles.Lit[t] && !hit[t] && Intersect.CircleCone(target, Strike.Radius, Arena.Center, RoseTiles.Slice.Radius, RoseTiles.Direction(t).ToDirection(), RoseTiles.Slice.HalfAngle))
+            if (_tiles.Lit[t] && !hit[t] && Intersect.CircleCone(target, _strike.Radius, Arena.Center, RoseTiles.Slice.Radius, RoseTiles.Direction(t).ToDirection(), RoseTiles.Slice.HalfAngle))
                 hit |= _tiles.ConnectedTo(t);
         return hit;
     }
 }
 
-// briar thorns animate ~11s before firing their line; the cast that follows gives exact position and timing
 class ValorousAscensionRect(BossModule module) : Components.GenericAOEs(module, AID.ValorousAscensionRect)
 {
-    private static readonly AOEShapeRect Line = new(40, 4);
-    private const int MaxShown = 2;
+    private static readonly AOEShapeRect _line = new(40, 4);
+    private const int _maxShown = 2;
     private readonly List<(ulong Thorn, WPos Origin, Angle Direction, DateTime Activation)> _lines = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        foreach (var l in _lines.OrderBy(l => l.Activation).Take(MaxShown))
-            yield return new(Line, l.Origin, l.Direction, l.Activation);
+        foreach (var l in _lines.OrderBy(l => l.Activation).Take(_maxShown))
+            yield return new(_line, l.Origin, l.Direction, l.Activation);
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
@@ -470,7 +460,6 @@ class T04ZeleniaStates : StateMachineBuilder
             .ActivateOnEnter<AlexandrianThunderIII>();
     }
 }
-
 
 [ModuleInfo(Contributors = "Kagekazu", GroupType = BossModuleInfo.GroupType.CFC, GroupID = 1030, NameID = 13861)]
 public class T04Zelenia(ModuleInit init) : BossModule(init, new(100, 100), DefaultArena)

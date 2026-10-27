@@ -273,22 +273,20 @@ class ThermalDivideSides(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// every ice shot later blooms into an eight-way star (a straight and a diagonal cross) ~5.2s after it lands;
-// the three oldest stars are shown, each burst clears one cross
 class IceBloomCross(BossModule module) : Components.GenericAOEs(module, AID.IceBloomCross)
 {
-    private static readonly AOEShapeCross Cross = new(40, 2.5f);
-    private const int MaxStars = 3;
+    private static readonly AOEShapeCross _cross = new(40, 2.5f);
+    private const int _maxStars = 3;
     private readonly List<(WPos Center, DateTime Activation, int CrossesLeft)> _stars = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        foreach (var s in _stars.Take(MaxStars))
+        foreach (var s in _stars.Take(_maxStars))
         {
-            // the diagonal cross goes off first, so it's only drawn while both remain
+            // diagonal cross resolves first
             if (s.CrossesLeft > 1)
-                yield return new(Cross, s.Center, 45.Degrees(), s.Activation);
-            yield return new(Cross, s.Center, default, s.Activation);
+                yield return new(_cross, s.Center, 45.Degrees(), s.Activation);
+            yield return new(_cross, s.Center, default, s.Activation);
         }
     }
 

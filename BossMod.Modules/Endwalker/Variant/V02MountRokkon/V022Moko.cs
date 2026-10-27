@@ -67,7 +67,6 @@ public enum SID : uint
     GiriDirection = 2970, // none->Boss, extra=0x248 (back) / 0x24A (front) / 0x249 (left) / 0x24B (right)
 }
 
-// the opening raidwide turns the rim into a deathwall - stay within the inner 40x40 square
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.KenkiRelease, 2.1f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x5B);
 
 class Giri(BossModule module) : Components.GenericAOEs(module)
@@ -137,12 +136,11 @@ class Giri(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// soldiers march forward in short hops once they play their order animation; each hop covers 'step' plus a small overlap behind
 abstract class MarchingSoldiers(BossModule module, OID soldier, AID hop, float step, float overlap, int hops, int shown)
     : Components.Exaflare(module, new AOEShapeRect(step, 2, overlap))
 {
-    private const float FirstHopDelay = 7.8f;
-    private const float HopInterval = 0.6f;
+    private const float _firstHopDelay = 7.8f;
+    private const float _hopInterval = 0.6f;
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
@@ -152,8 +150,8 @@ abstract class MarchingSoldiers(BossModule module, OID soldier, AID hop, float s
         {
             Next = actor.Position,
             Advance = actor.Rotation.ToDirection() * (step + overlap),
-            NextExplosion = WorldState.FutureTime(FirstHopDelay),
-            TimeToMove = HopInterval,
+            NextExplosion = WorldState.FutureTime(_firstHopDelay),
+            TimeToMove = _hopInterval,
             ExplosionsLeft = hops,
             MaxShownExplosions = shown,
         });
@@ -175,12 +173,11 @@ abstract class MarchingSoldiers(BossModule module, OID soldier, AID hop, float s
 class SpearmanOrdersFast(BossModule module) : MarchingSoldiers(module, OID.AshigaruSoheiFast, AID.SpearpointPushFast, 3, 0.474f, 12, 4);
 class SpearmanOrdersSlow(BossModule module) : MarchingSoldiers(module, OID.AshigaruSoheiSlow, AID.SpearpointPushSlow, 2, 0.316f, 18, 2);
 
-// flames that drift forward while alive; drawn as their path for the next 6y, AI keeps a bit of extra lead time
 class Spiritflames(BossModule module) : Components.GenericAOEs(module)
 {
-    private const float FlameRadius = 2.4f;
-    private const float Travel = 6;
-    private static readonly AOEShapeRect Path = new(Travel + FlameRadius, FlameRadius, FlameRadius);
+    private const float _flameRadius = 2.4f;
+    private const float _travel = 6;
+    private static readonly AOEShapeRect _path = new(_travel + _flameRadius, _flameRadius, _flameRadius);
     private readonly HashSet<ulong> _burning = [];
 
     private IEnumerable<Actor> Flames()
@@ -193,7 +190,7 @@ class Spiritflames(BossModule module) : Components.GenericAOEs(module)
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var f in Flames())
-            yield return new(Path, f.Position, f.Rotation);
+            yield return new(_path, f.Position, f.Rotation);
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
@@ -218,8 +215,8 @@ class Spiritflames(BossModule module) : Components.GenericAOEs(module)
         var soon = WorldState.FutureTime(1.5f);
         foreach (var f in Flames())
         {
-            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, FlameRadius));
-            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, Travel, FlameRadius), soon);
+            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, _flameRadius));
+            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, _travel, _flameRadius), soon);
         }
     }
 }
@@ -316,7 +313,6 @@ class V022MokoStates : StateMachineBuilder
     public V022MokoStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // always
             .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<KenkiRelease>()
             .ActivateOnEnter<MoonlessNight>()
@@ -327,7 +323,7 @@ class V022MokoStates : StateMachineBuilder
             .ActivateOnEnter<IronRain>()
             .ActivateOnEnter<UpwellFirst>()
             .ActivateOnEnter<UpwellRest>()
-            // route adds - YamaKagura looks up GhastlyGrasp, so keep it after
+            // note: YamaKagura looks up GhastlyGrasp on creation
             .ActivateOnEnter<Unsheathing>()
             .ActivateOnEnter<VeilSever>()
             .ActivateOnEnter<Clearout>()

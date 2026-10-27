@@ -98,7 +98,6 @@ public enum IconID : uint
     LineBaits = 521,
 }
 
-// layout swaps: map effects for the X-shaped and split-platform phases (and back to the square), plus one animation for the final arena
 class ArenaTransitions(BossModule module) : BossComponent(module)
 {
     public override void OnMapEffect(byte index, uint state)
@@ -130,10 +129,9 @@ class ArenaTransitions(BossModule module) : BossComponent(module)
     }
 }
 
-// on the split platforms, anyone floating from the gravity debuff can cross the gap, so the whole area counts as walkable while it lasts
 class FloatingBounds(BossModule module) : BossComponent(module)
 {
-    private static readonly ArenaBoundsRect WholeArea = new(12, 8);
+    private static readonly ArenaBoundsRect _wholeArea = new(12, 8);
     private BitMask _floating;
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
@@ -153,7 +151,7 @@ class FloatingBounds(BossModule module) : BossComponent(module)
         if (Arena.Center != T03QueenEternal.SplitArenaCenter)
             return;
 
-        ArenaBounds wanted = _floating.Any() ? WholeArea : T03QueenEternal.SplitPlatforms;
+        ArenaBounds wanted = _floating.Any() ? _wholeArea : T03QueenEternal.SplitPlatforms;
         if (!ReferenceEquals(Arena.Bounds, wanted))
             Arena.Bounds = wanted;
     }
@@ -194,14 +192,12 @@ class GravityGap(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// castellation: map effect 3 announces which north-south lanes get walled off ~6.6s later
-// lanes are given as (center x, full width) and run 60y south from the north edge
 class Besiegement(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly (float X, float Width)[] LanesA = [(82, 4), (90, 8), (101, 10), (114, 12)];
-    private static readonly (float X, float Width)[] LanesB = [(84, 8), (94, 8), (105, 10), (116, 8)];
-    private static readonly (float X, float Width)[] LanesC = [(84, 8), (95, 10), (111, 18)];
-    private static readonly (float X, float Width)[] LanesD = [(85, 10), (101, 18), (116, 8)];
+    private static readonly (float X, float Width)[] _lanesA = [(82, 4), (90, 8), (101, 10), (114, 12)];
+    private static readonly (float X, float Width)[] _lanesB = [(84, 8), (94, 8), (105, 10), (116, 8)];
+    private static readonly (float X, float Width)[] _lanesC = [(84, 8), (95, 10), (111, 18)];
+    private static readonly (float X, float Width)[] _lanesD = [(85, 10), (101, 18), (116, 8)];
 
     public readonly List<AOEInstance> AOEs = [];
     private int _layoutsSeen;
@@ -213,14 +209,14 @@ class Besiegement(BossModule module) : Components.GenericAOEs(module)
         if (index != 3)
             return;
 
-        // for the second layout of the fight the A/B states are swapped and the C/D states are ignored
+        // note: second layout swaps the A/B lanes and ignores C/D
         var second = _layoutsSeen == 1;
         var lanes = state switch
         {
-            0x00200010 => second ? LanesB : LanesA,
-            0x00800040 => second ? LanesA : LanesB,
-            0x02000100 when !second => LanesC,
-            0x08000400 when !second => LanesD,
+            0x00200010 => second ? _lanesB : _lanesA,
+            0x00800040 => second ? _lanesA : _lanesB,
+            0x02000100 when !second => _lanesC,
+            0x08000400 when !second => _lanesD,
             _ => null
         };
         if (lanes == null)
@@ -242,7 +238,6 @@ class Besiegement(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// the boss fires one big cone west, south or east; map effect 0 tells which ~5s ahead
 class Aethertithe(BossModule module) : Components.GenericAOEs(module)
 {
     private static readonly AOEShapeCone Cone = new(100, 35.Degrees());
@@ -330,20 +325,18 @@ class LegitimateForce(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// markers that get a 14x4 strike about 7s after they animate; shown as the circle around that rect since its facing isn't known yet,
-// and only treated as dangerous for the last couple of seconds
 class WaltzMarkers(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Reach = new(MathF.Sqrt(7 * 7 + 2 * 2));
-    private const float DangerWindow = 2.5f;
+    private static readonly AOEShapeCircle _reach = new(MathF.Sqrt(7 * 7 + 2 * 2));
+    private const float _dangerWindow = 2.5f;
     private readonly Dictionary<ulong, DateTime> _markers = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        var dangerAfter = WorldState.FutureTime(DangerWindow);
+        var dangerAfter = WorldState.FutureTime(_dangerWindow);
         foreach (var (id, activation) in _markers)
             if (WorldState.Actors.Find(id) is { } marker)
-                yield return new(Reach, marker.Position, default, activation, Risky: activation <= dangerAfter);
+                yield return new(_reach, marker.Position, default, activation, Risky: activation <= dangerAfter);
     }
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
@@ -357,7 +350,7 @@ class WaltzMarkers(BossModule module) : Components.GenericAOEs(module)
         if ((AID)spell.Action.ID != AID.WaltzOfTheRegaliaVisual)
             return;
 
-        // the visual comes from a separate caster standing on the marker
+        // visual is cast by a separate actor standing on the marker
         foreach (var id in _markers.Keys)
         {
             if (WorldState.Actors.Find(id) is { } marker && marker.Position.AlmostEqual(caster.Position, 0.5f))
@@ -426,7 +419,6 @@ class AbsoluteAuthorityDorito(BossModule module) : Components.StackWithIcon(modu
     }
 }
 
-// the hold debuff punishes any movement or action when it runs out; requirement mirrors whoever currently has it
 class AuthoritysHold(BossModule module) : Components.StayMove(module, 3)
 {
     public override void Update()
@@ -436,15 +428,14 @@ class AuthoritysHold(BossModule module) : Components.StayMove(module, 3)
     }
 }
 
-// each carrier of the gaze debuff petrifies whoever faces them when it expires; warn during the last 10s
 class AuthoritysGaze(BossModule module) : Components.GenericGaze(module)
 {
-    private const float WarnAhead = 10;
+    private const float _warnAhead = 10;
     private readonly Dictionary<ulong, DateTime> _carriers = [];
 
     public override IEnumerable<Eye> ActiveEyes(int slot, Actor actor)
     {
-        var warnBefore = WorldState.FutureTime(WarnAhead);
+        var warnBefore = WorldState.FutureTime(_warnAhead);
         foreach (var (id, expires) in _carriers)
             if (id != actor.InstanceID && expires <= warnBefore && WorldState.Actors.Find(id) is { } carrier)
                 yield return new(carrier.Position, expires);
@@ -544,11 +535,9 @@ class T03QueenEternalStates : StateMachineBuilder
     public T03QueenEternalStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // arena
             .ActivateOnEnter<ArenaTransitions>()
             .ActivateOnEnter<FloatingBounds>()
             .ActivateOnEnter<GravityGap>()
-            // raidwides & tankbuster
             .ActivateOnEnter<RoyalDomain>()
             .ActivateOnEnter<VirtualShiftRoyalDomain>()
             .ActivateOnEnter<VirtualShift2>()
@@ -558,7 +547,6 @@ class T03QueenEternalStates : StateMachineBuilder
             .ActivateOnEnter<AbsoluteAuthorityRaidwide>()
             .ActivateOnEnter<AbsoluteAuthorityHits>()
             .ActivateOnEnter<ProsecutionOfWar>()
-            // aoes
             .ActivateOnEnter<Aethertithe>()
             .ActivateOnEnter<LegitimateForce>()
             .ActivateOnEnter<Besiegement>()
@@ -571,7 +559,6 @@ class T03QueenEternalStates : StateMachineBuilder
             .ActivateOnEnter<DivideAndConquer>()
             .ActivateOnEnter<DownburstKB>()
             .ActivateOnEnter<PowerfulGustKB>()
-            // absolute authority debuffs
             .ActivateOnEnter<AbsoluteAuthorityCircle>()
             .ActivateOnEnter<AbsoluteAuthorityFlare>()
             .ActivateOnEnter<AbsoluteAuthorityDorito>()

@@ -72,20 +72,19 @@ public enum IconID : uint
     Tankbuster = 471, // player
 }
 
-// summoning the storm clouds cuts the square down to a circle (corners become deathwall); a later map effect restores the square
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.StormcloudSummons, 0.7f, new AOEShapeDonut(20, 28), false, new ArenaBoundsCircle(20), 0x00020001, MapIndex)
+class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.StormcloudSummons, 0.7f, new AOEShapeDonut(20, 28), false, new ArenaBoundsCircle(20), 0x00020001, _mapIndex)
 {
-    private const byte MapIndex = 0x64;
-    private static readonly ArenaBoundsSquare Square = new(20);
+    private const byte _mapIndex = 0x64;
+    private static readonly ArenaBoundsSquare _square = new(20);
 
-    // square and circle share the same radius, so warn on every summon instead of comparing sizes
+    // square and circle have the same radius
     protected override bool ShouldWarn => true;
 
     public override void OnMapEffect(byte index, uint state)
     {
         base.OnMapEffect(index, state);
-        if (index == MapIndex && state == 0x00080004)
-            Arena.Bounds = Square;
+        if (index == _mapIndex && state == 0x00080004)
+            Arena.Bounds = _square;
     }
 }
 
@@ -158,16 +157,15 @@ class FocusedTremorYokiUzu(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// each lightning wheel that spawns fires a 40y wide, 10y deep band centered on itself ~6.9s later
 class Levinburst(BossModule module) : Components.GenericAOEs(module, AID.Levinburst)
 {
-    private static readonly AOEShapeRect Band = new(5, 20, 5);
+    private static readonly AOEShapeRect _band = new(5, 20, 5);
     private readonly Dictionary<ulong, (WPos Position, Angle Rotation, DateTime Activation)> _wheels = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var w in _wheels.Values)
-            yield return new(Band, w.Position, w.Rotation, w.Activation);
+            yield return new(_band, w.Position, w.Rotation, w.Activation);
     }
 
     public override void OnActorCreated(Actor actor)
@@ -181,7 +179,6 @@ class Levinburst(BossModule module) : Components.GenericAOEs(module, AID.Levinbu
         if (spell.Action != WatchedAction)
             return;
         ++NumCasts;
-        // the wheels fire together; drop the whole set once the first one goes off
         _wheels.Clear();
     }
 }
@@ -212,13 +209,11 @@ class Reisho(BossModule module) : Components.Voidzone(module, 6, OID.HauntingThr
     }
 }
 
-// storm clouds struck by the rokujo line explode, and each explosion sets off every cloud within its radius a moment later;
-// the explosion radius grows with each use (8 / 12), and the third use simply detonates every remaining cloud at once (23)
 class Rokujo(BossModule module) : Components.GenericAOEs(module)
 {
     private record struct Detonation(ulong Cloud, WPos Position, float Radius, DateTime Activation);
 
-    private const int MaxShown = 6;
+    private const int _maxShown = 6;
     private readonly HashSet<ulong> _clouds = [];
     private readonly List<Detonation> _detonations = [];
 
@@ -227,7 +222,7 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         var shown = 0;
         foreach (var d in _detonations)
         {
-            if (shown >= MaxShown)
+            if (shown >= _maxShown)
                 yield break;
             var imminent = _detonations.Count > 2 && shown < 2;
             ++shown;
@@ -254,11 +249,11 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.OnceOnRokujo:
-                // links resolve roughly a second apart
+                // ~1s between links
                 PredictChain(caster.Position, spell.Rotation, 8, Module.CastFinishAt(spell, 1), 1);
                 break;
             case AID.TwiceOnRokujo:
-                // everything set off by the first explosions goes together
+                // everything after the first wave goes off together
                 PredictChain(caster.Position, spell.Rotation, 12, Module.CastFinishAt(spell, 1.6f), 1.5f, sameTimeAfterFirst: true);
                 break;
             case AID.ThriceOnRokujoVisual1:
@@ -286,7 +281,6 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
                 yield return cloud;
     }
 
-    // breadth-first: clouds in the 14y-wide line go first, then each wave sets off every untouched cloud within 'radius' of the previous wave
     private void PredictChain(WPos lineOrigin, Angle lineDirection, float radius, DateTime firstWave, float linkDelay, bool sameTimeAfterFirst = false)
     {
         var dir = lineDirection.ToDirection();
@@ -330,7 +324,6 @@ class V024ShishioStates : StateMachineBuilder
     public V024ShishioStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // always
             .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<Enkyo>()
             .ActivateOnEnter<SplittingCry>()
@@ -343,7 +336,6 @@ class V024ShishioStates : StateMachineBuilder
             .ActivateOnEnter<CloudToCloud3>()
             .ActivateOnEnter<SmallCircles>()
             .ActivateOnEnter<ThunderVortex>()
-            // route mechanics
             .ActivateOnEnter<Rush>()
             .ActivateOnEnter<Vasoconstrictor>()
             .ActivateOnEnter<FocusedTremorYokiUzu>()

@@ -72,34 +72,32 @@ public enum IconID : uint
     Tankbuster = 344, // player
 }
 
-// the opening raidwide turns the rim into a deathwall - stay within the inner 40x40 square
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.Unenlightenment, 0.5f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x16);
 
-// four octagonal platforms, one per quadrant 10y out on both axes; while one is raised, the ring around its edge is a gap
 class OctagonGaps(BossModule module) : Components.GenericAOEs(module)
 {
-    private const byte FirstIndex = 0x3D;
-    private const float QuadrantOffset = 10;
-    private static readonly AOEShapeDonut Gap = new(7.3f, 9.7f);
+    private const byte _firstIndex = 0x3D;
+    private const float _quadrantOffset = 10;
+    private static readonly AOEShapeDonut _gap = new(7.3f, 9.7f);
     private BitMask _raised;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var q in _raised.SetBits())
-            yield return new(Gap, QuadrantCenter(q));
+            yield return new(_gap, QuadrantCenter(q));
     }
 
     public override void OnMapEffect(byte index, uint state)
     {
-        var quadrant = index - FirstIndex;
+        var quadrant = index - _firstIndex;
         if (quadrant is < 0 or > 3 || state == 0x00020001)
             return;
         _raised[quadrant] = state == 0x00200010;
     }
 
-    // quadrants in map-effect order: NW, NE, SW, SE
+    // NW, NE, SW, SE
     private WPos QuadrantCenter(int quadrant)
-        => Module.Center + new WDir((quadrant & 1) == 0 ? -QuadrantOffset : QuadrantOffset, quadrant < 2 ? -QuadrantOffset : QuadrantOffset);
+        => Module.Center + new WDir((quadrant & 1) == 0 ? -_quadrantOffset : _quadrantOffset, quadrant < 2 ? -_quadrantOffset : _quadrantOffset);
 }
 
 class FlameAndSulphur(BossModule module) : Components.GenericAOEs(module)
@@ -145,20 +143,18 @@ class FlameAndSulphur(BossModule module) : Components.GenericAOEs(module)
 
 class ImpurePurgation(BossModule module) : Components.GroupedAOEs(module, [AID.ImpurePurgationFirst, AID.ImpurePurgationSecond], new AOEShapeCone(60, 22.5f.Degrees()), 4);
 
-// eight towers on a circle of radius 11 around the middle (map effects 0x1F-0x26, clockwise from north) light up one after another;
-// only the oldest one is soakable, by up to four players
 class MalformedPrayer(BossModule module) : Components.GenericTowers(module)
 {
-    private const byte FirstIndex = 0x1F;
-    private const float RingRadius = 11;
+    private const byte _firstIndex = 0x1F;
+    private const float _ringRadius = 11;
     private ImpurePurgation? _purgation;
 
     public override void OnMapEffect(byte index, uint state)
     {
-        var spot = index - FirstIndex;
+        var spot = index - _firstIndex;
         if (state != 0x00020001 || spot is < 0 or > 7)
             return;
-        var offset = (180 - 45 * spot).Degrees().ToDirection() * RingRadius;
+        var offset = (180 - 45 * spot).Degrees().ToDirection() * _ringRadius;
         Towers.Add(new(Module.Center + offset, 4, activation: WorldState.FutureTime(9)));
         RefreshSoakers();
     }
@@ -174,7 +170,6 @@ class MalformedPrayer(BossModule module) : Components.GenericTowers(module)
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        // while the cones are going off, anyone not already in the tower waits in the middle
         _purgation ??= Module.FindComponent<ImpurePurgation>();
         if (_purgation is { Casters.Count: > 0 } && Towers.Count > 0 && !Towers[0].IsInside(actor))
             hints.AddForbiddenZone(ShapeDistance.InvertedCircle(Module.Center, 3));
@@ -193,18 +188,17 @@ class MalformedPrayer(BossModule module) : Components.GenericTowers(module)
     }
 }
 
-// lightning orbs: the first two simply go off as big circles; later one orb gets a debuff and shrinks while the others stay big
 class Thundercall(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Small = new(8);
-    private static readonly AOEShapeCircle Large = new(18);
+    private static readonly AOEShapeCircle _small = new(8);
+    private static readonly AOEShapeCircle _large = new(18);
     private readonly List<(WPos Position, bool Shrunk, DateTime Activation)> _pending = [];
     private int _orbsSeen;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var p in _pending)
-            yield return new(p.Shrunk ? Small : Large, p.Position, default, p.Activation);
+            yield return new(p.Shrunk ? _small : _large, p.Position, default, p.Activation);
     }
 
     public override void OnActorCreated(Actor actor)
@@ -232,13 +226,12 @@ class Thundercall(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// a cross through the boss that turns by 22.5 degrees between each of its five hits; only the next hit is shown
 class WorldlyPursuit(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeCross Cross = new(60, 10);
-    private const float TurnDeg = 22.5f;
-    private const float Interval = 3.7f;
-    private const int Hits = 5;
+    private static readonly AOEShapeCross _cross = new(60, 10);
+    private const float _turnDeg = 22.5f;
+    private const float _interval = 3.7f;
+    private const int _hits = 5;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
@@ -249,7 +242,7 @@ class WorldlyPursuit(BossModule module) : Components.GenericRotatingAOE(module)
             _ => 0
         };
         if (sign != 0)
-            Sequences.Add(new(Cross, spell.LocXZ, spell.Rotation, (TurnDeg * sign).Degrees(), Module.CastFinishAt(spell), Interval, Hits, 1));
+            Sequences.Add(new(_cross, spell.LocXZ, spell.Rotation, (_turnDeg * sign).Degrees(), Module.CastFinishAt(spell), _interval, _hits, 1));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
@@ -277,7 +270,6 @@ class V023GoraiStates : StateMachineBuilder
     public V023GoraiStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // always
             .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<OctagonGaps>()
             .ActivateOnEnter<Unenlightenment>()
@@ -289,7 +281,6 @@ class V023GoraiStates : StateMachineBuilder
             .ActivateOnEnter<FlameAndSulphur>()
             .ActivateOnEnter<MalformedPrayer>()
             .ActivateOnEnter<ImpurePurgation>()
-            // route mechanics
             .ActivateOnEnter<PureShock>()
             .ActivateOnEnter<SelfDestruct>()
             .ActivateOnEnter<HumbleHammer>()

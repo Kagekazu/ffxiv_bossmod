@@ -35,7 +35,6 @@ public enum SID : uint
     GhostlyGuise = 3949, // none->player
 }
 
-// while the impact lines are active, the arena is a cross for flesh players and the full square for ghosts
 class CrossArena(BossModule module) : BossComponent(module)
 {
     private bool _active;
@@ -240,7 +239,6 @@ class BitterRegret3(BossModule module) : Components.StandardAOEs(module, AID.Bit
 class Impact(BossModule module) : Components.StandardAOEs(module, AID.Impact, new AOEShapeRect(40, 2));
 class Ghostcrusher(BossModule module) : Components.SimpleLineStack(module, 4, 80, AID.GhostcrusherMarker, AID.Ghostcrusher, 5);
 
-// AI positioning for the spreads is left out while still a ghost - GhostlyGuise steers the player back onto a platform first
 class Ghostduster(BossModule module) : Components.SpreadFromCastTargets(module, AID.Ghostduster, 8)
 {
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)

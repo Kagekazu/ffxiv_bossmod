@@ -45,7 +45,6 @@ public enum SID : uint
     MechanicStatus = 2397, // none->InfernBrand1/InfernBrand2, extra=0x1CA (knockback) / 0x1CB (pull) / 0x1C1 + 0x1F3 (laser wall)
 }
 
-// the opening raidwide shrinks the room to the inner 30x40 rectangle
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.ShowOfStrength, 0.8f, new AOEShapeRect(20, 15, 20), true, V014ZelessGah.DefaultBounds, 0x00080004, 0x14);
 
 class ArcaneFont(BossModule module) : Components.GenericAOEs(module, AID.BlazingBenifice)
@@ -253,7 +252,6 @@ class BallOfFire(BossModule module) : Components.GenericAOEs(module, AID.Burn)
     }
 }
 
-// the incense burners' mechanic is picked by the extra value of the status they receive
 static class BrandMechanic
 {
     public const ushort LaserWall = 0x1C1;
@@ -264,17 +262,16 @@ static class BrandMechanic
     public static bool Is(in ActorStatus status, ushort mechanic) => (SID)status.ID == SID.MechanicStatus && status.Extra == mechanic;
 }
 
-// a brand marked for the laser wall fires a thin line along its facing ~7.7s later; all walls drop together
 class TrespassersPyre(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect Wall = new(100, 1);
+    private static readonly AOEShapeRect _wall = new(100, 1);
     private readonly Dictionary<ulong, (WPos Origin, Angle Direction)> _walls = [];
     private DateTime _activation;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var w in _walls.Values)
-            yield return new(Wall, w.Origin, w.Direction, _activation);
+            yield return new(_wall, w.Origin, w.Direction, _activation);
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
@@ -292,7 +289,6 @@ class TrespassersPyre(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// knockback 20 away from the marked brand
 class InfernGale(BossModule module) : Components.Knockback(module, AID.InfernGale)
 {
     private WPos _origin;
@@ -322,10 +318,9 @@ class InfernGale(BossModule module) : Components.Knockback(module, AID.InfernGal
     }
 }
 
-// a pull towards the marked brand, which then explodes in an 8y circle; the cast itself refines the timing
 class InfernWellAOE(BossModule module) : Components.GenericAOEs(module, AID.InfernWellAOE)
 {
-    private static readonly AOEShapeCircle Blast = new(8);
+    private static readonly AOEShapeCircle _blast = new(8);
     public WPos Origin { get; private set; }
     public DateTime Activation { get; private set; }
     public bool Active => Activation != default;
@@ -333,10 +328,10 @@ class InfernWellAOE(BossModule module) : Components.GenericAOEs(module, AID.Infe
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (Active)
-            yield return new(Blast, Origin, default, Activation);
+            yield return new(_blast, Origin, default, Activation);
     }
 
-    public bool Covers(WPos pos) => Active && pos.InCircle(Origin, Blast.Radius);
+    public bool Covers(WPos pos) => Active && pos.InCircle(Origin, _blast.Radius);
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
@@ -362,7 +357,7 @@ class InfernWellAOE(BossModule module) : Components.GenericAOEs(module, AID.Infe
 
 class InfernWellPull(BossModule module) : Components.Knockback(module, AID.InfernWell)
 {
-    private const float PullDistance = 15;
+    private const float _pullDistance = 15;
     private InfernWellAOE? _blast;
     private WPos _origin;
     private DateTime _activation;
@@ -370,10 +365,9 @@ class InfernWellPull(BossModule module) : Components.Knockback(module, AID.Infer
     public override IEnumerable<Source> Sources(int slot, Actor actor)
     {
         if (_activation != default)
-            yield return new(_origin, PullDistance, _activation, Kind: Kind.TowardsOrigin, MinDistance: 1);
+            yield return new(_origin, _pullDistance, _activation, Kind: Kind.TowardsOrigin, MinDistance: 1);
     }
 
-    // landing inside the explosion that follows is just as bad as getting pulled into a wall
     public override bool DestinationUnsafe(int slot, Actor actor, WPos pos)
     {
         _blast ??= Module.FindComponent<InfernWellAOE>();
@@ -383,9 +377,9 @@ class InfernWellPull(BossModule module) : Components.Knockback(module, AID.Infer
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
         base.AddAIHints(slot, actor, assignment, hints);
-        // without immunity, stand far enough away that the pull can't drag you into the blast (8 radius + 15 pull)
+        // blast radius + pull distance
         if (_activation != default && !IsImmune(slot, _activation))
-            hints.AddForbiddenZone(ShapeDistance.Circle(_origin, 8 + PullDistance), _activation);
+            hints.AddForbiddenZone(ShapeDistance.Circle(_origin, 8 + _pullDistance), _activation);
     }
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)

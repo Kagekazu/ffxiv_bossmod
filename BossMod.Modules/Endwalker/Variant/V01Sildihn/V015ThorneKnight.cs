@@ -37,14 +37,11 @@ public enum AID : uint
     SignalFlare = 28923, // Helper->self, 7.0s cast, range 10 circle
 }
 
-// puppets fire a 6y-wide line after they light up; artillery carriages along one of the four walls (picked by map effect 0-3)
-// fire the same lines ~3.7s after their wall is announced
 class SpringToLife(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect Shot = new(45, 3);
+    private static readonly AOEShapeRect _shot = new(45, 3);
 
-    // carriage positions per wall, all facing into the room
-    private static readonly (WPos[] Carriages, Angle Facing)[] Walls =
+    private static readonly (WPos[] Carriages, Angle Facing)[] _walls =
     [
         ([new(263, -235), new(271.5f, -243.5f), new(280, -252)], 45.Degrees()),
         ([new(294, -256), new(302.5f, -247.5f), new(311, -239)], -45.Degrees()),
@@ -59,12 +56,12 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
 
     public override void OnMapEffect(byte index, uint state)
     {
-        if (state != 0x00020001 || index >= Walls.Length)
+        if (state != 0x00020001 || index >= _walls.Length)
             return;
-        var (positions, facing) = Walls[index];
+        var (positions, facing) = _walls[index];
         var activation = WorldState.FutureTime(3.7f);
         foreach (var p in positions)
-            _carriages.Add(new(Shot, p, facing, activation));
+            _carriages.Add(new(_shot, p, facing, activation));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -72,7 +69,7 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.ActivatePuppetVisual:
-                _puppets[caster.InstanceID] = new(Shot, caster.Position, spell.Rotation, WorldState.FutureTime(2.9f));
+                _puppets[caster.InstanceID] = new(_shot, caster.Position, spell.Rotation, WorldState.FutureTime(2.9f));
                 break;
             case AID.MagicCannon:
                 ++NumCasts;

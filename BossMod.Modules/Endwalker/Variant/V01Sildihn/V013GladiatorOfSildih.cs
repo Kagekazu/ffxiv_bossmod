@@ -1,4 +1,4 @@
-﻿namespace BossMod.Endwalker.Variant.V01Sildihn.V013GladiatorOfSildih;
+namespace BossMod.Endwalker.Variant.V01Sildihn.V013GladiatorOfSildih;
 
 public enum OID : uint
 {
@@ -213,13 +213,12 @@ class BitingWindUpdraftVoidzone(BossModule module) : Components.GenericAOEs(modu
     }
 }
 
-// each visage sweeps its beam in 10-degree steps, 2s apart, five beams in total; all remaining beams are shown
 class SilverFlame(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeRect Beam = new(60, 5);
-    private const int StepDeg = 10;
-    private const float Interval = 2;
-    private const int Beams = 5;
+    private static readonly AOEShapeRect _beam = new(60, 5);
+    private const int _stepDeg = 10;
+    private const float _interval = 2;
+    private const int _beams = 5;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
@@ -230,7 +229,7 @@ class SilverFlame(BossModule module) : Components.GenericRotatingAOE(module)
             _ => 0
         };
         if (sign != 0)
-            Sequences.Add(new(Beam, caster.Position, spell.Rotation, (StepDeg * sign).Degrees(), Module.CastFinishAt(spell), Interval, Beams, Beams));
+            Sequences.Add(new(_beam, caster.Position, spell.Rotation, (_stepDeg * sign).Degrees(), Module.CastFinishAt(spell), _interval, _beams, _beams));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -247,7 +246,6 @@ class V013GladiatorOfSildihStates : StateMachineBuilder
     public V013GladiatorOfSildihStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // boss
             .ActivateOnEnter<FlashOfSteel1>()
             .ActivateOnEnter<FlashOfSteel2>()
             .ActivateOnEnter<MightySmite>()
@@ -256,7 +254,6 @@ class V013GladiatorOfSildihStates : StateMachineBuilder
             .ActivateOnEnter<RushOfMight>()
             .ActivateOnEnter<ShatteringSteel>()
             .ActivateOnEnter<Landing>()
-            // routes
             .ActivateOnEnter<RackAndRuin>()
             .ActivateOnEnter<SunderedRemains>()
             .ActivateOnEnter<GoldenFlame>()

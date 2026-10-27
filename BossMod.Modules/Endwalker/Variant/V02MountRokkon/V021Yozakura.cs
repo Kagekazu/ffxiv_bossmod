@@ -91,7 +91,6 @@ public enum IconID : uint
     RootArrangement = 197, // player
 }
 
-// the first tankbuster coincides with the rim turning into a deathwall - stay within the inner 40x40 square
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.GloryNeverlasting, 3.7f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x35, 0x36);
 
 class SealOfRiotousBloom(BossModule module) : Components.GenericAOEs(module)
@@ -159,12 +158,11 @@ class SealOfRiotousBloom(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// telegraph casts preview the four upcoming season strikes ~7.4s ahead; the batch resolving next is highlighted
 class SeasonsOfTheFleeting(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone Cone = new(70, 22.5f.Degrees());
-    private static readonly AOEShapeRect Line = new(46, 2.5f);
-    private const int MaxShown = 8;
+    private static readonly AOEShapeCone _cone = new(70, 22.5f.Degrees());
+    private static readonly AOEShapeRect _line = new(46, 2.5f);
+    private const int _maxShown = 8;
     private readonly Queue<AOEInstance> _queued = new();
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
@@ -173,7 +171,7 @@ class SeasonsOfTheFleeting(BossModule module) : Components.GenericAOEs(module)
         DateTime first = default;
         foreach (var aoe in _queued)
         {
-            if (shown++ >= MaxShown)
+            if (shown++ >= _maxShown)
                 yield break;
             if (first == default)
                 first = aoe.Activation;
@@ -186,7 +184,7 @@ class SeasonsOfTheFleeting(BossModule module) : Components.GenericAOEs(module)
     {
         if ((AID)spell.Action.ID is AID.FireAndWaterTelegraph or AID.EarthAndLightningTelegraph)
         {
-            var shape = (AID)spell.Action.ID == AID.FireAndWaterTelegraph ? (AOEShape)Line : Cone;
+            var shape = (AID)spell.Action.ID == AID.FireAndWaterTelegraph ? (AOEShape)_line : _cone;
             _queued.Enqueue(new(shape, spell.LocXZ, spell.Rotation, Module.CastFinishAt(spell, 7.4f)));
         }
     }
@@ -198,25 +196,24 @@ class SeasonsOfTheFleeting(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// five donuts in a row around the middle; the boss's visual cast is the only advance notice
 class WindblossomWhirl(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeDonut Donut = new(5, 60);
-    private const int Repeats = 5;
+    private static readonly AOEShapeDonut _donut = new(5, 60);
+    private const int _repeats = 5;
     private int _remaining;
     private DateTime _activation;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (_remaining > 0)
-            yield return new(Donut, Arena.Center, default, _activation);
+            yield return new(_donut, Arena.Center, default, _activation);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID != AID.WindblossomWhirlVisual)
             return;
-        _remaining = Repeats;
+        _remaining = _repeats;
         _activation = Module.CastFinishAt(spell, 6.3f);
     }
 
@@ -230,12 +227,11 @@ class WindblossomWhirl(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-// a lance through the boss that sweeps around in 28-degree steps, five hits total
 class LevinblossomLance(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeRect Lance = new(30, 3.5f, 30);
-    private const int StepDeg = 28;
-    private const int Hits = 5;
+    private static readonly AOEShapeRect _lance = new(30, 3.5f, 30);
+    private const int _stepDeg = 28;
+    private const int _hits = 5;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
@@ -246,14 +242,14 @@ class LevinblossomLance(BossModule module) : Components.GenericRotatingAOE(modul
             _ => 0
         };
         if (direction != 0)
-            Sequences.Add(new(Lance, spell.LocXZ, spell.Rotation, (StepDeg * direction).Degrees(), Module.CastFinishAt(spell, 0.8f), 1, Hits));
+            Sequences.Add(new(_lance, spell.LocXZ, spell.Rotation, (_stepDeg * direction).Degrees(), Module.CastFinishAt(spell, 0.8f), 1, _hits));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID is not AID.LevinblossomLanceFirst and not AID.LevinblossomLanceRest || Sequences.Count == 0)
             return;
-        // the lance is symmetric, so the helper may face either way; fall back to the oldest sweep if it doesn't line up
+        // lance is symmetric, so the helper can face either way
         if (!AdvanceSequence(Sequences[0].Origin, spell.Rotation, WorldState.CurrentTime) && !AdvanceSequence(Sequences[0].Origin, spell.Rotation + 180.Degrees(), WorldState.CurrentTime))
             AdvanceSequence(0, WorldState.CurrentTime);
     }
@@ -303,7 +299,6 @@ class V021YozakuraStates : StateMachineBuilder
     public V021YozakuraStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // shared opener
             .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<GloryNeverlasting>()
             .ActivateOnEnter<KugeRantsui>()
@@ -312,11 +307,10 @@ class V021YozakuraStates : StateMachineBuilder
             .ActivateOnEnter<ArtOfTheWindblossom>()
             .ActivateOnEnter<SealOfRiotousBloom>()
             .ActivateOnEnter<SeasonsOfTheFleeting>()
-            // right route (seedlings / wind)
             .ActivateOnEnter<RootArrangement>()
             .ActivateOnEnter<AccursedSeedling>()
             .ActivateOnEnter<Witherwind>()
-            // left route (wind / rain) - DriftingPetals looks up Mudrain and Witherwind, so it has to come after both
+            // note: DriftingPetals looks up Mudrain and Witherwind on creation
             .ActivateOnEnter<WindblossomWhirl>()
             .ActivateOnEnter<LevinblossomStrike>()
             .ActivateOnEnter<Mudrain>()
@@ -324,7 +318,6 @@ class V021YozakuraStates : StateMachineBuilder
             .ActivateOnEnter<Icebloom>()
             .ActivateOnEnter<Shadowflight>()
             .ActivateOnEnter<MudPie>()
-            // middle route (dogs / lance)
             .ActivateOnEnter<FireblossomFlare>()
             .ActivateOnEnter<ArtOfTheFluff1>()
             .ActivateOnEnter<ArtOfTheFluff2>()

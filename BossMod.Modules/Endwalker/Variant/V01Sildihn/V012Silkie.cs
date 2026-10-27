@@ -51,7 +51,6 @@ public enum AID : uint
     PuffAndTumbleRest = 30656, // Helper->location, 1.6s cast, range 4 circle
 }
 
-// the opening raidwide shrinks the room to the inner 40x40 square; the wall is up ~1.8s after the cast starts
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.TotalWash, 0, new AOEShapeRect(20, 20, 20), true, V012Silkie.DefaultBounds, 0x00020001, 0x04)
 {
     protected override DateTime WarningTime(ActorCastInfo spell) => WorldState.FutureTime(1.8f);
@@ -89,18 +88,17 @@ class WashOut(BossModule module) : Components.KnockbackFromCastTarget(module, AI
     }
 }
 
-// each ewer overflows into a stream of puddles marching south ~3.39y every 0.8s; the stream piles up at the south wall (z = -135)
 class EasternEwers(BossModule module) : Components.Exaflare(module, 4)
 {
-    private const float SouthWallZ = -135;
-    private const int Puddles = 14;
-    private static readonly WDir Step = new(0, 3.38788f);
+    private const float _southWallZ = -135;
+    private const int _puddles = 14;
+    private static readonly WDir _step = new(0, 3.38788f);
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID != AID.BrimOver)
             return;
-        var line = new Line { Next = caster.Position, Advance = Step, NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = Puddles };
+        var line = new Line { Next = caster.Position, Advance = _step, NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = _puddles };
         line.MaxShownExplosions = line.ExplosionsLeft;
         Lines.Add(line);
     }
@@ -117,11 +115,10 @@ class EasternEwers(BossModule module) : Components.Exaflare(module, 4)
         AdvanceLine(line, caster.Position);
         if (line.ExplosionsLeft <= 0)
             Lines.Remove(line);
-        else if (line.Next.Z > SouthWallZ)
-            line.Next = line.Next with { Z = SouthWallZ };
+        else if (line.Next.Z > _southWallZ)
+            line.Next = line.Next with { Z = _southWallZ };
     }
 
-    // a ewer that gets destroyed stops pouring
     public override void OnActorDestroyed(Actor actor)
     {
         if ((OID)actor.OID == OID.EasternEwer)
@@ -198,7 +195,6 @@ class V012SilkieStates : StateMachineBuilder
     {
         // TODO: route 3 Silken Sweep (broom, Sweep knockback 5) has no component
         TrivialPhase()
-            // boss
             .ActivateOnEnter<TotalWash>()
             .ActivateOnEnter<ArenaShrink>()
             .ActivateOnEnter<CarpetBeater>()
@@ -210,7 +206,6 @@ class V012SilkieStates : StateMachineBuilder
             .ActivateOnEnter<SpotRemover>()
             .ActivateOnEnter<DustBlusterRaidwide>()
             .ActivateOnEnter<DustBluster>()
-            // routes
             .ActivateOnEnter<EasternEwers>()
             .ActivateOnEnter<WashOut>()
             .ActivateOnEnter<SilkenPuff>()

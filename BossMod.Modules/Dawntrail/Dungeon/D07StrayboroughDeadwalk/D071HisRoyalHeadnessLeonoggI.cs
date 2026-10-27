@@ -40,16 +40,15 @@ public enum IconID : uint
 
 class MaliciousMist(BossModule module) : Components.RaidwideCast(module, AID.MaliciousMist);
 
-// first mist turns everything outside the inner circle into a deathwall; bounds switch once the map effect plays
 class MistDeathwall(BossModule module) : Components.GenericAOEs(module, AID.MaliciousMist)
 {
-    private static readonly AOEShapeDonut Ring = new(D071HisRoyalHeadnessLeonoggI.DefaultBounds.Radius, D071HisRoyalHeadnessLeonoggI.StartingBounds.Radius + 0.5f);
+    private static readonly AOEShapeDonut _ring = new(D071HisRoyalHeadnessLeonoggI.DefaultBounds.Radius, D071HisRoyalHeadnessLeonoggI.StartingBounds.Radius + 0.5f);
     private DateTime _shrinkAt;
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (_shrinkAt != default)
-            yield return new(Ring, Arena.Center, Activation: _shrinkAt);
+            yield return new(_ring, Arena.Center, Activation: _shrinkAt);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -67,12 +66,11 @@ class MistDeathwall(BossModule module) : Components.GenericAOEs(module, AID.Mali
     }
 }
 
-// puddles chase whoever is closest to the first one; every later puddle lands up to 3y towards the target
 class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module)
 {
-    private static readonly AOEShapeCircle Puddle = new(4);
-    private const float Step = 3;
-    private const float Interval = 1.6f;
+    private static readonly AOEShapeCircle _puddle = new(4);
+    private const float _step = 3;
+    private const float _interval = 1.6f;
     private int _chases;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -94,14 +92,14 @@ class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module
         if (target == null)
             return;
 
-        // the first two chases seen in logs had 5 puddles, later ones 4
+        // note: first two chases had 5 puddles, later ones 4
         var puddles = ++_chases <= 2 ? 5 : 4;
-        Chasers.Add(new(Puddle, target, caster.Position, 0, puddles, Module.CastFinishAt(spell), Interval, Step));
+        Chasers.Add(new(_puddle, target, caster.Position, 0, puddles, Module.CastFinishAt(spell), _interval, _step));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is AID.LoomingNightmareFirst or AID.LoomingNightmareRest && Advance(caster.Position, Step, WorldState.CurrentTime) == null)
+        if ((AID)spell.Action.ID is AID.LoomingNightmareFirst or AID.LoomingNightmareRest && Advance(caster.Position, _step, WorldState.CurrentTime) == null)
             ReportError($"no chaser near {caster.Position}");
     }
 
@@ -114,7 +112,6 @@ class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module
     {
         base.AddAIHints(slot, actor, assignment, hints);
 
-        // kite along the rim so the trail doesn't cover the middle of the arena
         foreach (var c in Chasers)
             if (c.Target == actor)
                 hints.AddForbiddenZone(ShapeDistance.Circle(Arena.Center, 13.5f), c.NextActivation);
@@ -129,10 +126,9 @@ class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module
     }
 }
 
-// noggins telegraph with an animation ~3s before their small circle; the cast itself only gives the final timing
 class FallingNightmare(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle Shape = new(2);
+    private static readonly AOEShapeCircle _shape = new(2);
     private readonly Dictionary<ulong, AOEInstance> _pending = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _pending.Values;
@@ -140,13 +136,13 @@ class FallingNightmare(BossModule module) : Components.GenericAOEs(module)
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
         if ((OID)actor.OID == OID.NobleNoggin && id == 0x11D1)
-            _pending[actor.InstanceID] = new(Shape, actor.Position, default, WorldState.FutureTime(3));
+            _pending[actor.InstanceID] = new(_shape, actor.Position, default, WorldState.FutureTime(3));
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if (IsNightmare(spell.Action))
-            _pending[caster.InstanceID] = new(Shape, caster.Position, default, Module.CastFinishAt(spell));
+            _pending[caster.InstanceID] = new(_shape, caster.Position, default, Module.CastFinishAt(spell));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
@@ -163,17 +159,16 @@ class FallingNightmare(BossModule module) : Components.GenericAOEs(module)
     private static bool IsNightmare(ActionID action) => (AID)action.ID is AID.FallingNightmare1 or AID.FallingNightmare2;
 }
 
-// dolls dash forward in short hops once they start charging, until they play their stop animation
 class SpiritedCharge(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect Path = new(6, 1);
+    private static readonly AOEShapeRect _path = new(6, 1);
     private readonly HashSet<ulong> _charging = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         foreach (var id in _charging)
             if (WorldState.Actors.Find(id) is { IsDestroyed: false } doll)
-                yield return new(Path, doll.Position, doll.Rotation);
+                yield return new(_path, doll.Position, doll.Rotation);
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -191,10 +186,9 @@ class SpiritedCharge(BossModule module) : Components.GenericAOEs(module)
     public override void OnActorDestroyed(Actor actor) => _charging.Remove(actor.InstanceID);
 }
 
-// five explosions per line, 4y apart
 class EvilScheme(BossModule module) : Components.Exaflare(module, 4)
 {
-    private const float Spacing = 4;
+    private const float _spacing = 4;
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
@@ -203,7 +197,7 @@ class EvilScheme(BossModule module) : Components.Exaflare(module, 4)
         var line = new Line
         {
             Next = caster.Position,
-            Advance = spell.Rotation.ToDirection() * Spacing,
+            Advance = spell.Rotation.ToDirection() * _spacing,
             NextExplosion = Module.CastFinishAt(spell, 1.6f),
             TimeToMove = 1.5f,
             ExplosionsLeft = 5,

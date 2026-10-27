@@ -45,14 +45,12 @@ public enum TetherID : uint
     PipeCleaner = 17, // player->Boss
 }
 
-// the opening raidwide trims the outer half-yalm of the circle
 class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.FlagrantCombustion, 2.9f, new AOEShapeDonut(20, 21), false, V025Enenra.DefaultBounds, 0x00020001, 0x28);
 
-// smoke wisps telegraph a half-arena sweep ~16.6s ahead; where it comes from depends on which wisp variant played its animation
 class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTheFire)
 {
-    private static readonly AOEShapeRect HalfArena = new(50, 25);
-    private static readonly float DiagonalReach = 11 * MathF.Sqrt(2);
+    private static readonly AOEShapeRect _halfArena = new(50, 25);
+    private static readonly float _diagonalReach = 11 * MathF.Sqrt(2);
     private readonly List<AOEInstance> _sweeps = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _sweeps;
@@ -62,9 +60,9 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
         if (state != 0x00010002 || Telegraph((OID)actor.OID) is not var (originAngle, reach, facing))
             return;
         var origin = actor.Position + (actor.Rotation + originAngle).ToDirection() * reach;
-        // origins land on whole-yalm coordinates; rounding removes the float noise from the wisp's facing
+        // origins are on whole coordinates
         origin = new(MathF.Round(origin.X), MathF.Round(origin.Z));
-        _sweeps.Add(new(HalfArena, origin, actor.Rotation + facing, WorldState.FutureTime(16.6f)));
+        _sweeps.Add(new(_halfArena, origin, actor.Rotation + facing, WorldState.FutureTime(16.6f)));
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
@@ -75,11 +73,11 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
         _sweeps.RemoveAt(index >= 0 ? index : 0);
     }
 
-    // (direction of the sweep origin relative to the wisp's facing, distance to it, sweep direction relative to the wisp's facing)
+    // (origin direction, origin distance, sweep direction), relative to the wisp
     private static (Angle, float, Angle)? Telegraph(OID wisp) => wisp switch
     {
-        OID.SmokeVisual1 => (-45.Degrees(), DiagonalReach, 90.Degrees()),
-        OID.SmokeVisual2 => (45.Degrees(), DiagonalReach, -90.Degrees()),
+        OID.SmokeVisual1 => (-45.Degrees(), _diagonalReach, 90.Degrees()),
+        OID.SmokeVisual2 => (45.Degrees(), _diagonalReach, -90.Degrees()),
         OID.SmokeVisual3 => (default(Angle), 22f, 180.Degrees()),
         _ => null
     };
@@ -87,7 +85,6 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
 
 class StringRock(BossModule module) : ExpandingRings(module, AID.KiseruClamor, new AOEShapeCircle(6), new AOEShapeDonut(6, 12), new AOEShapeDonut(12, 18), new AOEShapeDonut(18, 24));
 
-// knockback stops at walls; when the smoldering circles are around, the only safe landing spot is pushing from the very middle
 class ClearingSmoke(BossModule module) : Components.KnockbackFromCastTarget(module, AID.ClearingSmoke, 16, stopAtWall: true)
 {
     private Smoldering? _smoldering;
