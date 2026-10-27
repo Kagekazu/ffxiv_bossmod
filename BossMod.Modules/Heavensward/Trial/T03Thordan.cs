@@ -96,34 +96,44 @@ class TheDragonsGaze(BossModule module) : Components.CastGaze(module, AID.TheDra
 class SacredCross(BossModule module) : Components.RaidwideCast(module, AID.SacredCross);
 class DimensionalCollapse(BossModule module) : Components.StandardAOEs(module, AID.DimensionalCollapse, 10);
 class Conviction(BossModule module) : Components.CastTowers(module, AID.Conviction, 2);
-class HeavyImpact(BossModule module) : Components.ConcentricAOEs(module, [
-    new AOEShapeCone(6, 135.Degrees()),
-    new AOEShapeDonutSector(6, 12, 135.Degrees()),
-    new AOEShapeDonutSector(12, 18, 135.Degrees()),
-    new AOEShapeDonutSector(18, 27, 135.Degrees())])
+class HeavyImpact(BossModule module) : Components.GenericAOEs(module)
 {
+    private static readonly AOEShape[] _rings = [new AOEShapeCone(6, 135.Degrees()), new AOEShapeDonutSector(6, 12, 135.Degrees()), new AOEShapeDonutSector(12, 18, 135.Degrees()), new AOEShapeDonutSector(18, 27, 135.Degrees())];
+    private readonly List<(WPos Origin, Angle Direction, int Ring, DateTime Activation)> _waves = [];
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
+    {
+        foreach (var w in _waves)
+            yield return new(_rings[w.Ring], w.Origin, w.Direction, w.Activation);
+    }
+
     public override void Update()
     {
-        Sequences.RemoveAll(s => s.NextActivation != default && s.NextActivation < WorldState.CurrentTime.AddSeconds(-1));
+        // a wave whose next ring never came is stale
+        var cutoff = WorldState.CurrentTime.AddSeconds(-1);
+        _waves.RemoveAll(w => w.Activation < cutoff);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID == AID.HeavyImpact1)
-            AddSequence(caster.Position, Module.CastFinishAt(spell), spell.Rotation);
+            _waves.Add((caster.Position, spell.Rotation, 0, Module.CastFinishAt(spell)));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        var order = (AID)spell.Action.ID switch
-        {
-            AID.HeavyImpact1 => 0,
-            AID.HeavyImpact2 => 1,
-            AID.HeavyImpact3 => 2,
-            AID.HeavyImpact4 => 3,
-            _ => -1
-        };
-        AdvanceSequence(order, caster.Position, WorldState.FutureTime(1.9f), spell.Rotation);
+        if ((AID)spell.Action.ID is < AID.HeavyImpact1 or > AID.HeavyImpact4)
+            return;
+        ++NumCasts;
+        var ring = (int)(spell.Action.ID - (uint)AID.HeavyImpact1);
+        var index = _waves.FindIndex(w => w.Ring == ring && w.Origin.AlmostEqual(caster.Position, 1));
+        if (index < 0)
+            return;
+        var (origin, direction, _, _) = _waves[index];
+        if (ring + 1 < _rings.Length)
+            _waves[index] = (origin, direction, ring + 1, WorldState.FutureTime(1.9f));
+        else
+            _waves.RemoveAt(index);
     }
 }
 class SpiralThrust(BossModule module) : Components.StandardAOEs(module, AID.SpiralThrust, new AOEShapeRect(54.2f, 6));
