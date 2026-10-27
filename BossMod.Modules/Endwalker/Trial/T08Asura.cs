@@ -79,7 +79,27 @@ public enum IconID : uint
     Spreadmarker = 139, // player
 }
 
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.LowerRealm, 0.8f, new AOEShapeDonut(19, 20), false, T08Asura.DefaultBounds, 0x00020001, 0x01);
+class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+{
+    private AOEInstance? _aoe;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.LowerRealm && Arena.Bounds.Radius > 19)
+            _aoe = new(new AOEShapeDonut(19, 20), Arena.Center, default, Module.CastFinishAt(spell, 0.8f));
+    }
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        if (index == 0x01 && state == 0x00020001)
+        {
+            _aoe = null;
+            Arena.Bounds = T08Asura.DefaultBounds;
+        }
+    }
+}
 
 class CastAOEs(BossModule module) : Components.GenericAOEs(module)
 {
@@ -153,7 +173,6 @@ class Laceration(BossModule module) : Components.StandardAOEs(module, AID.Lacera
 
 class ManyFaces(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone _half = new(20, 90.Degrees());
     private Angle? _wrathDirection;
     private Angle? _delightDirection;
     private bool _wrathChosen;
@@ -163,9 +182,9 @@ class ManyFaces(BossModule module) : Components.GenericAOEs(module)
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (_wrathChosen && _wrathDirection is { } wrath)
-            yield return new(_half, Module.Center, wrath, _activation);
+            yield return new(new AOEShapeCone(20, 90.Degrees()), Module.Center, wrath, _activation);
         if (_delightChosen && _delightDirection is { } delight)
-            yield return new(_half, Module.Center, delight, _activation);
+            yield return new(new AOEShapeCone(20, 90.Degrees()), Module.Center, delight, _activation);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -203,7 +222,6 @@ class ManyFaces(BossModule module) : Components.GenericAOEs(module)
 
 class MyriadAspects(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone _wedge = new(40, 15.Degrees());
     private readonly List<Actor> _casters = [];
 
     // only the wave resolving next
@@ -216,7 +234,7 @@ class MyriadAspects(BossModule module) : Components.GenericAOEs(module)
 
         foreach (var c in _casters)
             if (c.CastInfo is { } cast && Module.CastFinishAt(cast) is var at && at <= next.AddSeconds(1))
-                yield return new(_wedge, Module.Center, cast.Rotation, at);
+                yield return new(new AOEShapeCone(40, 15.Degrees()), Module.Center, cast.Rotation, at);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -237,9 +255,6 @@ class MyriadAspects(BossModule module) : Components.GenericAOEs(module)
 
 class SixBladedKhadga(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone _blade = new(20, 90.Degrees());
-    private const float _interval = 2;
-    private const int _maxShown = 2;
     private readonly Queue<Angle> _blades = new();
     private DateTime _next;
 
@@ -248,9 +263,9 @@ class SixBladedKhadga(BossModule module) : Components.GenericAOEs(module)
         var index = 0;
         foreach (var direction in _blades)
         {
-            if (index == _maxShown)
+            if (index == 2)
                 yield break;
-            yield return new(_blade, Module.PrimaryActor.Position, direction, _next.AddSeconds(_interval * index), index == 0 ? ArenaColor.Danger : 0);
+            yield return new(new AOEShapeCone(20, 90.Degrees()), Module.PrimaryActor.Position, direction, _next.AddSeconds(2 * index), index == 0 ? ArenaColor.Danger : 0);
             ++index;
         }
     }
@@ -270,7 +285,7 @@ class SixBladedKhadga(BossModule module) : Components.GenericAOEs(module)
             return;
         ++NumCasts;
         _blades.TryDequeue(out _);
-        _next = WorldState.FutureTime(_interval);
+        _next = WorldState.FutureTime(2);
     }
 }
 
@@ -285,7 +300,7 @@ class T08AsuraStates : StateMachineBuilder
     public T08AsuraStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<LowerRealm>()
             .ActivateOnEnter<Ephemerality>()
             .ActivateOnEnter<CuttingJewel>()

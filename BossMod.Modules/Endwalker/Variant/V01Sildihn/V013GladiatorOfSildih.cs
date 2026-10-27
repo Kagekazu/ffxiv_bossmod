@@ -215,29 +215,23 @@ class BitingWindUpdraftVoidzone(BossModule module) : Components.GenericAOEs(modu
 
 class SilverFlame(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeRect _beam = new(60, 5);
-    private const int _stepDeg = 10;
-    private const float _interval = 2;
-    private const int _beams = 5;
-
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var sign = (AID)spell.Action.ID switch
+        switch ((AID)spell.Action.ID)
         {
-            AID.SilverFlameFirstCCW => 1,
-            AID.SilverFlameFirstCW => -1,
-            _ => 0
-        };
-        if (sign != 0)
-            Sequences.Add(new(_beam, caster.Position, spell.Rotation, (_stepDeg * sign).Degrees(), Module.CastFinishAt(spell), _interval, _beams, _beams));
+            case AID.SilverFlameFirstCW:
+                Sequences.Add(new(new AOEShapeRect(60, 5), caster.Position, spell.Rotation, -10.Degrees(), Module.CastFinishAt(spell), 2, 5, 5));
+                break;
+            case AID.SilverFlameFirstCCW:
+                Sequences.Add(new(new AOEShapeRect(60, 5), caster.Position, spell.Rotation, 10.Degrees(), Module.CastFinishAt(spell), 2, 5, 5));
+                break;
+        }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is not (AID.SilverFlameFirstCW or AID.SilverFlameFirstCCW or AID.SilverFlameRest))
-            return;
-        if (!AdvanceSequence(caster.Position, spell.Rotation, WorldState.CurrentTime))
-            ReportError($"unexpected silver flame from {caster.InstanceID:X}");
+        if ((AID)spell.Action.ID is AID.SilverFlameFirstCW or AID.SilverFlameFirstCCW or AID.SilverFlameRest)
+            AdvanceSequence(caster.Position, spell.Rotation, WorldState.CurrentTime);
     }
 }
 

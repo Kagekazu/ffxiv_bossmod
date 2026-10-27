@@ -72,19 +72,27 @@ public enum IconID : uint
     Tankbuster = 471, // player
 }
 
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.StormcloudSummons, 0.7f, new AOEShapeDonut(20, 28), false, new ArenaBoundsCircle(20), 0x00020001, _mapIndex)
+class ArenaChange(BossModule module) : Components.GenericAOEs(module)
 {
-    private const byte _mapIndex = 0x64;
-    private static readonly ArenaBoundsSquare _square = new(20);
+    private AOEInstance? _aoe;
 
-    // square and circle have the same radius
-    protected override bool ShouldWarn => true;
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.StormcloudSummons)
+            _aoe = new(new AOEShapeDonut(20, 28), Arena.Center, default, Module.CastFinishAt(spell, 0.7f));
+    }
 
     public override void OnMapEffect(byte index, uint state)
     {
-        base.OnMapEffect(index, state);
-        if (index == _mapIndex && state == 0x00080004)
-            Arena.Bounds = _square;
+        if (index == 0x64 && state == 0x00020001)
+        {
+            _aoe = null;
+            Arena.Bounds = new ArenaBoundsCircle(20);
+        }
+        else if (index == 0x64 && state == 0x00080004)
+            Arena.Bounds = new ArenaBoundsSquare(20);
     }
 }
 
@@ -159,27 +167,23 @@ class FocusedTremorYokiUzu(BossModule module) : Components.GenericAOEs(module)
 
 class Levinburst(BossModule module) : Components.GenericAOEs(module, AID.Levinburst)
 {
-    private static readonly AOEShapeRect _band = new(5, 20, 5);
-    private readonly Dictionary<ulong, (WPos Position, Angle Rotation, DateTime Activation)> _wheels = [];
+    private readonly List<AOEInstance> _aoes = [];
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        foreach (var w in _wheels.Values)
-            yield return new(_band, w.Position, w.Rotation, w.Activation);
-    }
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _aoes;
 
     public override void OnActorCreated(Actor actor)
     {
         if ((OID)actor.OID == OID.Rairin)
-            _wheels[actor.InstanceID] = (actor.Position, actor.Rotation, WorldState.FutureTime(6.9f));
+            _aoes.Add(new(new AOEShapeRect(5, 20, 5), actor.Position, actor.Rotation, WorldState.FutureTime(6.9f)));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if (spell.Action != WatchedAction)
-            return;
-        ++NumCasts;
-        _wheels.Clear();
+        if (spell.Action == WatchedAction)
+        {
+            ++NumCasts;
+            _aoes.Clear();
+        }
     }
 }
 
@@ -211,37 +215,27 @@ class Reisho(BossModule module) : Components.Voidzone(module, 6, OID.HauntingThr
 
 class Rokujo(BossModule module) : Components.GenericAOEs(module)
 {
-    private record struct Detonation(ulong Cloud, WPos Position, float Radius, DateTime Activation);
-
-    private const int _maxShown = 6;
-    private readonly HashSet<ulong> _clouds = [];
-    private readonly List<Detonation> _detonations = [];
+    private readonly List<Actor> _clouds = [];
+    private readonly List<(Actor Cloud, AOEInstance AOE)> _explosions = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        var shown = 0;
-        foreach (var d in _detonations)
-        {
-            if (shown >= _maxShown)
-                yield break;
-            var imminent = _detonations.Count > 2 && shown < 2;
-            ++shown;
-            yield return new(new AOEShapeCircle(d.Radius), d.Position, default, d.Activation, imminent ? ArenaColor.Danger : 0);
-        }
+        for (var i = 0; i < Math.Min(_explosions.Count, 6); ++i)
+            yield return _explosions.Count > 2 && i < 2 ? _explosions[i].AOE with { Color = ArenaColor.Danger } : _explosions[i].AOE;
     }
 
     public override void OnActorCreated(Actor actor)
     {
         if ((OID)actor.OID == OID.Raiun)
-            _clouds.Add(actor.InstanceID);
+            _clouds.Add(actor);
     }
 
-    public override void OnActorDestroyed(Actor actor) => _clouds.Remove(actor.InstanceID);
+    public override void OnActorDestroyed(Actor actor) => _clouds.Remove(actor);
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID == AID.SmokeaterAbsorb)
-            _clouds.Remove(caster.InstanceID);
+            _clouds.Remove(caster);
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
@@ -250,16 +244,15 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         {
             case AID.OnceOnRokujo:
                 // ~1s between links
-                PredictChain(caster.Position, spell.Rotation, 8, Module.CastFinishAt(spell, 1), 1);
+                Chain(caster, spell, 8, 1, 1, false);
                 break;
             case AID.TwiceOnRokujo:
                 // everything after the first wave goes off together
-                PredictChain(caster.Position, spell.Rotation, 12, Module.CastFinishAt(spell, 1.6f), 1.5f, sameTimeAfterFirst: true);
+                Chain(caster, spell, 12, 1.6f, 1.5f, true);
                 break;
             case AID.ThriceOnRokujoVisual1:
-                var at = Module.CastFinishAt(spell, 7.1f);
-                foreach (var cloud in LiveClouds())
-                    _detonations.Add(new(cloud.InstanceID, cloud.Position, 23, at));
+                foreach (var c in _clouds)
+                    _explosions.Add((c, new(new AOEShapeCircle(23), c.Position, default, Module.CastFinishAt(spell, 7.1f))));
                 _clouds.Clear();
                 break;
         }
@@ -267,40 +260,28 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is not (AID.LeapingLevin1 or AID.LeapingLevin2 or AID.LeapingLevin3) || _detonations.Count == 0)
-            return;
-        ++NumCasts;
-        var index = _detonations.FindIndex(d => d.Cloud == caster.InstanceID);
-        _detonations.RemoveAt(index >= 0 ? index : 0);
-    }
-
-    private IEnumerable<Actor> LiveClouds()
-    {
-        foreach (var id in _clouds)
-            if (WorldState.Actors.Find(id) is { IsDestroyed: false } cloud)
-                yield return cloud;
-    }
-
-    private void PredictChain(WPos lineOrigin, Angle lineDirection, float radius, DateTime firstWave, float linkDelay, bool sameTimeAfterFirst = false)
-    {
-        var dir = lineDirection.ToDirection();
-        var remaining = LiveClouds().ToList();
-        var wave = remaining.Where(c => c.Position.InRect(lineOrigin, dir, 30, 30, 7)).ToList();
-        var activation = firstWave;
-        var waveIndex = 0;
-        while (wave.Count > 0)
+        if ((AID)spell.Action.ID is AID.LeapingLevin1 or AID.LeapingLevin2 or AID.LeapingLevin3 && _explosions.Count > 0)
         {
+            ++NumCasts;
+            var index = _explosions.FindIndex(e => e.Cloud == caster);
+            _explosions.RemoveAt(index >= 0 ? index : 0);
+        }
+    }
+
+    // clouds hit by the line explode, setting off every other cloud in range on the next link
+    private void Chain(Actor caster, ActorCastInfo spell, float radius, float firstDelay, float linkDelay, bool linksTogether)
+    {
+        var wave = _clouds.Where(c => c.Position.InRect(caster.Position, spell.Rotation.ToDirection(), 30, 30, 7)).ToList();
+        for (var link = 0; wave.Count > 0; ++link)
+        {
+            var delay = firstDelay + (link == 0 ? 0 : linksTogether ? linkDelay : linkDelay * link);
             foreach (var c in wave)
             {
-                _detonations.Add(new(c.InstanceID, c.Position, radius, activation));
-                _clouds.Remove(c.InstanceID);
-                remaining.Remove(c);
+                _explosions.Add((c, new(new AOEShapeCircle(radius), c.Position, default, Module.CastFinishAt(spell, delay))));
+                _clouds.Remove(c);
             }
-
-            var previous = wave;
-            wave = [.. remaining.Where(c => previous.Any(p => p.Position.InCircle(c.Position, radius)))];
-            ++waveIndex;
-            activation = sameTimeAfterFirst ? firstWave.AddSeconds(linkDelay) : firstWave.AddSeconds(linkDelay * waveIndex);
+            var prev = wave;
+            wave = [.. _clouds.Where(c => prev.Any(p => p.Position.InCircle(c.Position, radius)))];
         }
     }
 }
@@ -324,7 +305,7 @@ class V024ShishioStates : StateMachineBuilder
     public V024ShishioStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<Enkyo>()
             .ActivateOnEnter<SplittingCry>()
             .ActivateOnEnter<NoblePursuit>()

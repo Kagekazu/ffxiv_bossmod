@@ -67,7 +67,27 @@ public enum SID : uint
     GiriDirection = 2970, // none->Boss, extra=0x248 (back) / 0x24A (front) / 0x249 (left) / 0x24B (right)
 }
 
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.KenkiRelease, 2.1f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x5B);
+class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+{
+    private AOEInstance? _aoe;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.KenkiRelease && Arena.Bounds.Radius > 20)
+            _aoe = new(new AOEShapeRect(20, 20, 20), Arena.Center, default, Module.CastFinishAt(spell, 2.1f), Inverted: true);
+    }
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        if (index == 0x5B && state == 0x00020001)
+        {
+            _aoe = null;
+            Arena.Bounds = new ArenaBoundsSquare(20);
+        }
+    }
+}
 
 class Giri(BossModule module) : Components.GenericAOEs(module)
 {
@@ -136,38 +156,26 @@ class Giri(BossModule module) : Components.GenericAOEs(module)
     }
 }
 
-abstract class MarchingSoldiers(BossModule module, OID soldier, AID hop, float step, float overlap, int hops, int shown)
-    : Components.Exaflare(module, new AOEShapeRect(step, 2, overlap))
+abstract class MarchingSoldiers(BossModule module, OID soldier, AID push, float lenFront, float lenBack, int explosions, int shown) : Components.Exaflare(module, new AOEShapeRect(lenFront, 2, lenBack))
 {
-    private const float _firstHopDelay = 7.8f;
-    private const float _hopInterval = 0.6f;
-
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if ((OID)actor.OID != soldier || id != 0x25E9)
-            return;
-        Lines.Add(new()
-        {
-            Next = actor.Position,
-            Advance = actor.Rotation.ToDirection() * (step + overlap),
-            NextExplosion = WorldState.FutureTime(_firstHopDelay),
-            TimeToMove = _hopInterval,
-            ExplosionsLeft = hops,
-            MaxShownExplosions = shown,
-        });
+        if (id == 0x25E9 && (OID)actor.OID == soldier)
+            Lines.Add(new() { Next = actor.Position, Advance = (lenFront + lenBack) * actor.Rotation.ToDirection(), NextExplosion = WorldState.FutureTime(7.8f), TimeToMove = 0.6f, ExplosionsLeft = explosions, MaxShownExplosions = shown });
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID != hop)
-            return;
-        var line = Lines.MinBy(l => (l.Next - caster.Position).LengthSq());
-        if (line == null || !line.Next.AlmostEqual(caster.Position, 1))
-            return;
-        ++NumCasts;
-        AdvanceLine(line, caster.Position);
-        if (line.ExplosionsLeft <= 0)
-            Lines.Remove(line);
+        if ((AID)spell.Action.ID == push)
+        {
+            ++NumCasts;
+            var index = Lines.FindIndex(l => l.Next.AlmostEqual(caster.Position, 1));
+            if (index < 0)
+                return;
+            AdvanceLine(Lines[index], caster.Position);
+            if (Lines[index].ExplosionsLeft == 0)
+                Lines.RemoveAt(index);
+        }
     }
 }
 class SpearmanOrdersFast(BossModule module) : MarchingSoldiers(module, OID.AshigaruSoheiFast, AID.SpearpointPushFast, 3, 0.474f, 12, 4);
@@ -175,48 +183,29 @@ class SpearmanOrdersSlow(BossModule module) : MarchingSoldiers(module, OID.Ashig
 
 class Spiritflames(BossModule module) : Components.GenericAOEs(module)
 {
-    private const float _flameRadius = 2.4f;
-    private const float _travel = 6;
-    private static readonly AOEShapeRect _path = new(_travel + _flameRadius, _flameRadius, _flameRadius);
-    private readonly HashSet<ulong> _burning = [];
+    private readonly List<Actor> _flames = [];
 
-    private IEnumerable<Actor> Flames()
-    {
-        foreach (var id in _burning)
-            if (WorldState.Actors.Find(id) is { IsDestroyed: false } flame)
-                yield return flame;
-    }
-
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        foreach (var f in Flames())
-            yield return new(_path, f.Position, f.Rotation);
-    }
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _flames.Select(f => new AOEInstance(new AOEShapeRect(8.4f, 2.4f, 2.4f), f.Position, f.Rotation));
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if ((OID)actor.OID != OID.Spiritflame)
-            return;
-        switch (id)
+        if ((OID)actor.OID == OID.Spiritflame)
         {
-            case 0x1E46:
-                _burning.Add(actor.InstanceID);
-                break;
-            case 0x1E3C:
-                _burning.Remove(actor.InstanceID);
-                break;
+            if (id == 0x1E46)
+                _flames.Add(actor);
+            else if (id == 0x1E3C)
+                _flames.Remove(actor);
         }
     }
 
-    public override void OnActorDestroyed(Actor actor) => _burning.Remove(actor.InstanceID);
+    public override void OnActorDestroyed(Actor actor) => _flames.Remove(actor);
 
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        var soon = WorldState.FutureTime(1.5f);
-        foreach (var f in Flames())
+        foreach (var f in _flames)
         {
-            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, _flameRadius));
-            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, _travel, _flameRadius), soon);
+            hints.AddForbiddenZone(ShapeDistance.Circle(f.Position, 2.4f));
+            hints.AddForbiddenZone(ShapeDistance.Capsule(f.Position, f.Rotation, 6, 2.4f), WorldState.FutureTime(1.5f));
         }
     }
 }
@@ -313,7 +302,7 @@ class V022MokoStates : StateMachineBuilder
     public V022MokoStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<KenkiRelease>()
             .ActivateOnEnter<MoonlessNight>()
             .ActivateOnEnter<Giri>()

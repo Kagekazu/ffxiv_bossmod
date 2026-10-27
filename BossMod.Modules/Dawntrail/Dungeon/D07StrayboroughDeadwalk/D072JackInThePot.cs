@@ -35,14 +35,9 @@ public enum SID : uint
 
 class PipingPour(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCircle _puddle = new(8);
     private readonly Queue<WPos> _puddles = new();
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        foreach (var p in _puddles)
-            yield return new(_puddle, p);
-    }
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => _puddles.Select(p => new AOEInstance(new AOEShapeCircle(8), p));
 
     public override void OnStatusGain(Actor actor, in ActorStatus status)
     {
@@ -52,7 +47,7 @@ class PipingPour(BossModule module) : Components.GenericAOEs(module)
 
     public override void OnActorPlayActionTimelineEvent(Actor actor, ushort id)
     {
-        if ((OID)actor.OID == OID.SpectralSamovar && id == 0x11DD)
+        if (id == 0x11DD && (OID)actor.OID == OID.SpectralSamovar)
             _puddles.TryDequeue(out _);
     }
 }

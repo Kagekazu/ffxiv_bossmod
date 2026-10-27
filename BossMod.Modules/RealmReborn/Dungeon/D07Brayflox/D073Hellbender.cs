@@ -32,29 +32,21 @@ class StagnantSpray(BossModule module) : Components.StandardAOEs(module, AID.Sta
 class BogBubble(BossModule module) : Components.Cleave(module, AID.BogBubble, new AOEShapeCircle(6), originAtTarget: true);
 class Touchdown(BossModule module) : Components.GenericAOEs(module, AID.Touchdown)
 {
-    private static readonly AOEShapeCircle _landing = new(10);
-    private WPos _spot;
-    private DateTime _activation;
+    private AOEInstance? _aoe;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        if (_activation != default)
-            yield return new(_landing, _spot, default, _activation);
-    }
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
 
     public override void OnActorCreated(Actor actor)
     {
-        if ((OID)actor.OID != OID.Aiatar)
-            return;
-        _spot = actor.Position;
-        _activation = WorldState.FutureTime(0.9f);
+        if ((OID)actor.OID == OID.Aiatar)
+            _aoe = new(new AOEShapeCircle(10), actor.Position, default, WorldState.FutureTime(0.9f));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         base.OnEventCast(caster, spell);
         if (spell.Action == WatchedAction)
-            _activation = default;
+            _aoe = null;
     }
 }
 

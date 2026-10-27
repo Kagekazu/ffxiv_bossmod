@@ -91,7 +91,27 @@ public enum IconID : uint
     RootArrangement = 197, // player
 }
 
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.GloryNeverlasting, 3.7f, new AOEShapeRect(20, 20, 20), true, new ArenaBoundsSquare(20), 0x00020001, 0x35, 0x36);
+class ArenaChange(BossModule module) : Components.GenericAOEs(module)
+{
+    private AOEInstance? _aoe;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.GloryNeverlasting && Arena.Bounds.Radius > 20)
+            _aoe = new(new AOEShapeRect(20, 20, 20), Arena.Center, default, Module.CastFinishAt(spell, 3.7f), Inverted: true);
+    }
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        if ((index is 0x35 or 0x36) && state == 0x00020001)
+        {
+            _aoe = null;
+            Arena.Bounds = new ArenaBoundsSquare(20);
+        }
+    }
+}
 
 class SealOfRiotousBloom(BossModule module) : Components.GenericAOEs(module)
 {
@@ -160,97 +180,82 @@ class SealOfRiotousBloom(BossModule module) : Components.GenericAOEs(module)
 
 class SeasonsOfTheFleeting(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeCone _cone = new(70, 22.5f.Degrees());
-    private static readonly AOEShapeRect _line = new(46, 2.5f);
-    private const int _maxShown = 8;
-    private readonly Queue<AOEInstance> _queued = new();
+    private readonly List<AOEInstance> _aoes = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
-        var shown = 0;
-        DateTime first = default;
-        foreach (var aoe in _queued)
-        {
-            if (shown++ >= _maxShown)
-                yield break;
-            if (first == default)
-                first = aoe.Activation;
-            var imminent = _queued.Count > 4 && aoe.Activation <= first.AddSeconds(0.5f);
-            yield return imminent ? aoe with { Color = ArenaColor.Danger } : aoe;
-        }
+        for (var i = 0; i < Math.Min(_aoes.Count, 8); ++i)
+            yield return _aoes.Count > 4 && i < 4 ? _aoes[i] with { Color = ArenaColor.Danger } : _aoes[i];
     }
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is AID.FireAndWaterTelegraph or AID.EarthAndLightningTelegraph)
+        switch ((AID)spell.Action.ID)
         {
-            var shape = (AID)spell.Action.ID == AID.FireAndWaterTelegraph ? (AOEShape)_line : _cone;
-            _queued.Enqueue(new(shape, spell.LocXZ, spell.Rotation, Module.CastFinishAt(spell, 7.4f)));
+            case AID.FireAndWaterTelegraph:
+                _aoes.Add(new(new AOEShapeRect(46, 2.5f), spell.LocXZ, spell.Rotation, Module.CastFinishAt(spell, 7.4f)));
+                break;
+            case AID.EarthAndLightningTelegraph:
+                _aoes.Add(new(new AOEShapeCone(70, 22.5f.Degrees()), spell.LocXZ, spell.Rotation, Module.CastFinishAt(spell, 7.4f)));
+                break;
         }
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is >= AID.SeasonOfFire and <= AID.SeasonOfEarth && _queued.TryDequeue(out _))
+        if ((AID)spell.Action.ID is AID.SeasonOfFire or AID.SeasonOfWater or AID.SeasonOfLightning or AID.SeasonOfEarth && _aoes.Count > 0)
+        {
             ++NumCasts;
+            _aoes.RemoveAt(0);
+        }
     }
 }
 
 class WindblossomWhirl(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeDonut _donut = new(5, 60);
-    private const int _repeats = 5;
+    private AOEInstance? _aoe;
     private int _remaining;
-    private DateTime _activation;
 
-    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
-    {
-        if (_remaining > 0)
-            yield return new(_donut, Arena.Center, default, _activation);
-    }
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
 
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID != AID.WindblossomWhirlVisual)
-            return;
-        _remaining = _repeats;
-        _activation = Module.CastFinishAt(spell, 6.3f);
+        if ((AID)spell.Action.ID == AID.WindblossomWhirlVisual)
+        {
+            _aoe = new(new AOEShapeDonut(5, 60), Arena.Center, default, Module.CastFinishAt(spell, 6.3f));
+            _remaining = 5;
+        }
     }
 
     public override void OnCastFinished(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID is AID.WindblossomWhirl1 or AID.WindblossomWhirl2 && _remaining > 0)
+        if ((AID)spell.Action.ID is AID.WindblossomWhirl1 or AID.WindblossomWhirl2 && _aoe != null)
         {
             ++NumCasts;
-            --_remaining;
+            if (--_remaining == 0)
+                _aoe = null;
         }
     }
 }
 
 class LevinblossomLance(BossModule module) : Components.GenericRotatingAOE(module)
 {
-    private static readonly AOEShapeRect _lance = new(30, 3.5f, 30);
-    private const int _stepDeg = 28;
-    private const int _hits = 5;
-
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        var direction = (AID)spell.Action.ID switch
+        switch ((AID)spell.Action.ID)
         {
-            AID.LevinblossomLanceCCW => 1,
-            AID.LevinblossomLanceCW => -1,
-            _ => 0
-        };
-        if (direction != 0)
-            Sequences.Add(new(_lance, spell.LocXZ, spell.Rotation, (_stepDeg * direction).Degrees(), Module.CastFinishAt(spell, 0.8f), 1, _hits));
+            case AID.LevinblossomLanceCW:
+                Sequences.Add(new(new AOEShapeRect(30, 3.5f, 30), spell.LocXZ, spell.Rotation, -28.Degrees(), Module.CastFinishAt(spell, 0.8f), 1, 5));
+                break;
+            case AID.LevinblossomLanceCCW:
+                Sequences.Add(new(new AOEShapeRect(30, 3.5f, 30), spell.LocXZ, spell.Rotation, 28.Degrees(), Module.CastFinishAt(spell, 0.8f), 1, 5));
+                break;
+        }
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
-        if ((AID)spell.Action.ID is not AID.LevinblossomLanceFirst and not AID.LevinblossomLanceRest || Sequences.Count == 0)
-            return;
-        // lance is symmetric, so the helper can face either way
-        if (!AdvanceSequence(Sequences[0].Origin, spell.Rotation, WorldState.CurrentTime) && !AdvanceSequence(Sequences[0].Origin, spell.Rotation + 180.Degrees(), WorldState.CurrentTime))
+        if ((AID)spell.Action.ID is AID.LevinblossomLanceFirst or AID.LevinblossomLanceRest && Sequences.Count > 0)
             AdvanceSequence(0, WorldState.CurrentTime);
     }
 }
@@ -299,7 +304,7 @@ class V021YozakuraStates : StateMachineBuilder
     public V021YozakuraStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<GloryNeverlasting>()
             .ActivateOnEnter<KugeRantsui>()
             .ActivateOnEnter<OkaRanman>()

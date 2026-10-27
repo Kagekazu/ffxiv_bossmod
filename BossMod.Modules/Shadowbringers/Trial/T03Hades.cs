@@ -89,24 +89,16 @@ class DarkEruptionSpread(BossModule module) : Components.UniformStackSpread(modu
     {
         if (Spreads.Count == 0)
             return;
-        var index = (AID)spell.Action.ID switch
+        switch ((AID)spell.Action.ID)
         {
-            // location-targeted, so match the closest marked player
-            AID.DarkEruption => ClosestSpread(spell.TargetXZ),
-            AID.NetherBlast => Spreads.FindIndex(s => s.Target.InstanceID == spell.MainTargetID) is var i && i >= 0 ? i : 0,
-            _ => -1
-        };
-        if (index >= 0)
-            Spreads.RemoveAt(index);
-    }
-
-    private int ClosestSpread(WPos pos)
-    {
-        var best = 0;
-        for (var i = 1; i < Spreads.Count; ++i)
-            if ((Spreads[i].Target.Position - pos).LengthSq() < (Spreads[best].Target.Position - pos).LengthSq())
-                best = i;
-        return best;
+            case AID.DarkEruption: // location-targeted, so match the closest marked player
+                Spreads.Remove(Spreads.MinBy(s => (s.Target.Position - spell.TargetXZ).LengthSq()));
+                break;
+            case AID.NetherBlast:
+                var index = Spreads.FindIndex(s => s.Target.InstanceID == spell.MainTargetID);
+                Spreads.RemoveAt(index >= 0 ? index : 0);
+                break;
+        }
     }
 }
 
@@ -205,7 +197,15 @@ class BlackCauldron(BossModule module) : Components.RaidwideInstant(module, AID.
 class ChorusOfTheLost(BossModule module) : Components.RaidwideCast(module, AID.ChorusOfTheLost);
 class ShadowAdds(BossModule module) : Components.AddsMulti(module, [(uint)OID.ShadowOfTheAncients, (uint)OID.ShadowOfTheAncientsStack, (uint)OID.AetherialGaol], 1);
 
-class DoomTowers(BossModule module) : ActorTowers(module, (uint)OID.DoomTower, 2, 1, 2);
+class DoomTowers(BossModule module) : Components.GenericTowers(module)
+{
+    public override void Update()
+    {
+        Towers.Clear();
+        foreach (var t in Module.Enemies(OID.DoomTower).Where(a => !a.IsDestroyed))
+            Towers.Add(new(t.Position, 2, 1, 2));
+    }
+}
 
 class NetherBlast(BossModule module) : Components.BaitAwayTethers(module, new AOEShapeCircle(6), (uint)TetherID.NetherBlast, AID.NetherBlast, centerAtTarget: true)
 {

@@ -51,9 +51,26 @@ public enum AID : uint
     PuffAndTumbleRest = 30656, // Helper->location, 1.6s cast, range 4 circle
 }
 
-class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.TotalWash, 0, new AOEShapeRect(20, 20, 20), true, V012Silkie.DefaultBounds, 0x00020001, 0x04)
+class ArenaChange(BossModule module) : Components.GenericAOEs(module)
 {
-    protected override DateTime WarningTime(ActorCastInfo spell) => WorldState.FutureTime(1.8f);
+    private AOEInstance? _aoe;
+
+    public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor) => Utils.ZeroOrOne(_aoe);
+
+    public override void OnCastStarted(Actor caster, ActorCastInfo spell)
+    {
+        if ((AID)spell.Action.ID == AID.TotalWash && Arena.Bounds.Radius > 20)
+            _aoe = new(new AOEShapeRect(20, 20, 20), Arena.Center, default, WorldState.FutureTime(1.8f), Inverted: true);
+    }
+
+    public override void OnMapEffect(byte index, uint state)
+    {
+        if (index == 0x04 && state == 0x00020001)
+        {
+            _aoe = null;
+            Arena.Bounds = V012Silkie.DefaultBounds;
+        }
+    }
 }
 
 class DustBluster(BossModule module) : Components.KnockbackFromCastTarget(module, AID.DustBluster, 16)
@@ -90,33 +107,26 @@ class WashOut(BossModule module) : Components.KnockbackFromCastTarget(module, AI
 
 class EasternEwers(BossModule module) : Components.Exaflare(module, 4)
 {
-    private const float _southWallZ = -135;
-    private const int _puddles = 14;
-    private static readonly WDir _step = new(0, 3.38788f);
-
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
-        if ((AID)spell.Action.ID != AID.BrimOver)
-            return;
-        var line = new Line { Next = caster.Position, Advance = _step, NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = _puddles };
-        line.MaxShownExplosions = line.ExplosionsLeft;
-        Lines.Add(line);
+        if ((AID)spell.Action.ID == AID.BrimOver)
+            Lines.Add(new() { Next = caster.Position, Advance = new(0, 3.38788f), NextExplosion = Module.CastFinishAt(spell), TimeToMove = 0.8f, ExplosionsLeft = 14, MaxShownExplosions = 14 });
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID != AID.Rinse)
             return;
-        var line = Lines.Find(l => l.Next.AlmostEqual(caster.Position, 1));
-        if (line == null)
+        var index = Lines.FindIndex(l => l.Next.AlmostEqual(caster.Position, 1));
+        if (index < 0)
             return;
-
         ++NumCasts;
+        var line = Lines[index];
         AdvanceLine(line, caster.Position);
-        if (line.ExplosionsLeft <= 0)
-            Lines.Remove(line);
-        else if (line.Next.Z > _southWallZ)
-            line.Next = line.Next with { Z = _southWallZ };
+        if (line.ExplosionsLeft == 0)
+            Lines.RemoveAt(index);
+        else if (line.Next.Z > -135) // stream piles up at the south wall
+            line.Next = new(line.Next.X, -135);
     }
 
     public override void OnActorDestroyed(Actor actor)
@@ -196,7 +206,7 @@ class V012SilkieStates : StateMachineBuilder
         // TODO: route 3 Silken Sweep (broom, Sweep knockback 5) has no component
         TrivialPhase()
             .ActivateOnEnter<TotalWash>()
-            .ActivateOnEnter<ArenaShrink>()
+            .ActivateOnEnter<ArenaChange>()
             .ActivateOnEnter<CarpetBeater>()
             .ActivateOnEnter<SqueakyCleanSmall>()
             .ActivateOnEnter<SqueakyCleanBig>()

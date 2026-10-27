@@ -86,8 +86,6 @@ class GhostlyGuise(BossModule module) : Components.GenericAOEs(module)
 
     public BitMask Ghostly;
 
-    public static bool IsGhost(BossModule module, int slot) => module.FindComponent<GhostlyGuise>()?.Ghostly[slot] ?? false;
-
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
     {
         if (!_activated)
@@ -243,7 +241,7 @@ class Ghostduster(BossModule module) : Components.SpreadFromCastTargets(module, 
 {
     public override void AddAIHints(int slot, Actor actor, PartyRolesConfig.Assignment assignment, AIHints hints)
     {
-        if (!GhostlyGuise.IsGhost(Module, slot))
+        if (!(Module.FindComponent<GhostlyGuise>()?.Ghostly[slot] ?? false))
             base.AddAIHints(slot, actor, assignment, hints);
     }
 }

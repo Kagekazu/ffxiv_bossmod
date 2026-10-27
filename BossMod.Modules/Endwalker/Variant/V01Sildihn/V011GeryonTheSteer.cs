@@ -217,15 +217,12 @@ class SuddenlySewage(BossModule module) : Components.GenericAOEs(module, AID.Sud
 
 class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOEShapeRect(10, 5))
 {
-    private static readonly WDir _halfLane = new(0, 5); // hits are centered on the helper
-    private const float _stepLength = 10;
-    private const int _steps = 4;
-
     public override void OnMapEffect(byte index, uint state)
     {
         if (index != 0x0A)
             return;
-        (float East, float West)? lanes = state switch
+        // z of the east boulder (rolling west) and the west boulder (rolling east)
+        (float, float)? lanes = state switch
         {
             0x00020001 => (-15, 5),
             0x00200010 => (-15, 15),
@@ -233,36 +230,27 @@ class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOESha
             0x00800040 => (-5, 15),
             _ => null
         };
-        if (lanes is not { } l)
+        if (lanes is not (var east, var west))
             return;
         var activation = WorldState.FutureTime(16.2f);
-        Roll(new(15, l.East), -1, activation);
-        Roll(new(-15, l.West), 1, activation);
+        Lines.Add(new() { Next = new(15, east - 5), Advance = new(-10, 0), NextExplosion = activation, TimeToMove = 0.3f, ExplosionsLeft = 4, MaxShownExplosions = 4 });
+        Lines.Add(new() { Next = new(-15, west - 5), Advance = new(10, 0), NextExplosion = activation, TimeToMove = 0.3f, ExplosionsLeft = 4, MaxShownExplosions = 4 });
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
     {
         if ((AID)spell.Action.ID != AID.RollingBoulder)
             return;
-        var hit = caster.Position - _halfLane;
-        var line = Lines.MinBy(l => (l.Next - hit).LengthSq());
-        if (line == null || !line.Next.AlmostEqual(hit, 1))
+        // hits are centered on the helper, rect starts 5y north of it
+        var pos = caster.Position - new WDir(0, 5);
+        var index = Lines.FindIndex(l => l.Next.AlmostEqual(pos, 1));
+        if (index < 0)
             return;
         ++NumCasts;
-        AdvanceLine(line, hit);
-        if (line.ExplosionsLeft <= 0)
-            Lines.Remove(line);
+        AdvanceLine(Lines[index], pos);
+        if (Lines[index].ExplosionsLeft == 0)
+            Lines.RemoveAt(index);
     }
-
-    private void Roll(WPos start, int directionX, DateTime activation) => Lines.Add(new()
-    {
-        Next = start - _halfLane,
-        Advance = new(_stepLength * directionX, 0),
-        NextExplosion = activation,
-        TimeToMove = 0.3f,
-        ExplosionsLeft = _steps,
-        MaxShownExplosions = _steps,
-    });
 }
 
 class Intake(BossModule module) : Components.Knockback(module, stopAtWall: true)

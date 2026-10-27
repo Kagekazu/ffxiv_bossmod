@@ -308,13 +308,10 @@ class WaterPuddles(BossModule module) : BossComponent(module)
 
 class Fetters(BossModule module) : BossComponent(module)
 {
-    private static readonly ArenaBoundsSquare _released = new(30);
-
     public override void OnStatusLose(Actor actor, in ActorStatus status)
     {
-        if ((SID)status.ID != SID.Fetters || !Raid.TryFindSlot(actor, out _))
-            return;
-        Arena.Bounds = _released;
+        if ((SID)status.ID == SID.Fetters && Raid.TryFindSlot(actor, out _))
+            Arena.Bounds = new ArenaBoundsSquare(30);
     }
 }
 

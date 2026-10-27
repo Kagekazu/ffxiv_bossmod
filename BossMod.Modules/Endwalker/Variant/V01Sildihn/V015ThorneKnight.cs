@@ -39,8 +39,6 @@ public enum AID : uint
 
 class SpringToLife(BossModule module) : Components.GenericAOEs(module)
 {
-    private static readonly AOEShapeRect _shot = new(45, 3);
-
     private static readonly (WPos[] Carriages, Angle Facing)[] _walls =
     [
         ([new(263, -235), new(271.5f, -243.5f), new(280, -252)], 45.Degrees()),
@@ -61,7 +59,7 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
         var (positions, facing) = _walls[index];
         var activation = WorldState.FutureTime(3.7f);
         foreach (var p in positions)
-            _carriages.Add(new(_shot, p, facing, activation));
+            _carriages.Add(new(new AOEShapeRect(45, 3), p, facing, activation));
     }
 
     public override void OnEventCast(Actor caster, ActorCastEvent spell)
@@ -69,7 +67,7 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.ActivatePuppetVisual:
-                _puppets[caster.InstanceID] = new(_shot, caster.Position, spell.Rotation, WorldState.FutureTime(2.9f));
+                _puppets[caster.InstanceID] = new(new AOEShapeRect(45, 3), caster.Position, spell.Rotation, WorldState.FutureTime(2.9f));
                 break;
             case AID.MagicCannon:
                 ++NumCasts;
@@ -79,10 +77,10 @@ class SpringToLife(BossModule module) : Components.GenericAOEs(module)
             case AID.AmaljaaArtillery:
                 ++NumCasts;
                 var index = _carriages.FindIndex(c => c.Origin.AlmostEqual(caster.Position, 1));
-                if (index < 0 && _carriages.Count > 0)
-                    index = 0;
                 if (index >= 0)
                     _carriages.RemoveAt(index);
+                else if (_carriages.Count > 0)
+                    _carriages.RemoveAt(0);
                 break;
         }
     }
