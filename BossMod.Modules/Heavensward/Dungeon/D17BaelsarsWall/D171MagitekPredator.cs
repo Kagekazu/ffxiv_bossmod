@@ -35,12 +35,6 @@ class MagitekMissile(BossModule module) : Components.SingleTargetInstant(module,
         if ((SID)status.ID == SID.Prey && Raid.TryFindSlot(actor, out var slot))
             Targets.Add((slot, status.ExpireAt));
     }
-
-    public override void OnStatusLose(Actor actor, in ActorStatus status)
-    {
-        if ((SID)status.ID == SID.Prey && Raid.TryFindSlot(actor, out var slot))
-            Targets.RemoveAll(t => t.slot == slot);
-    }
 }
 
 class D171MagitekPredatorStates : StateMachineBuilder

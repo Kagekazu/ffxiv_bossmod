@@ -98,6 +98,8 @@ class DimensionalCollapse(BossModule module) : Components.StandardAOEs(module, A
 class Conviction(BossModule module) : Components.CastTowers(module, AID.Conviction, 2);
 class HeavyImpact(BossModule module) : Components.ConcentricAOEs(module, [new AOEShapeCone(6, 135.Degrees()), new AOEShapeDonutSector(6, 12, 135.Degrees()), new AOEShapeDonutSector(12, 18, 135.Degrees()), new AOEShapeDonutSector(18, 27, 135.Degrees())])
 {
+    public override void Update() => Sequences.RemoveAll(s => s.NextActivation != default && s.NextActivation < WorldState.CurrentTime.AddSeconds(-1));
+
     public override void OnCastStarted(Actor caster, ActorCastInfo spell)
     {
         if ((AID)spell.Action.ID == AID.HeavyImpact1)
