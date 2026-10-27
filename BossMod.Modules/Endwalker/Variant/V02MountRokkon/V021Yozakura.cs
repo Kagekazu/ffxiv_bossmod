@@ -249,7 +249,6 @@ class LevinblossomLance(BossModule module) : Components.GenericRotatingAOE(modul
     {
         if ((AID)spell.Action.ID is not AID.LevinblossomLanceFirst and not AID.LevinblossomLanceRest || Sequences.Count == 0)
             return;
-        // lance is symmetric, so the helper can face either way
         if (!AdvanceSequence(Sequences[0].Origin, spell.Rotation, WorldState.CurrentTime) && !AdvanceSequence(Sequences[0].Origin, spell.Rotation + 180.Degrees(), WorldState.CurrentTime))
             AdvanceSequence(0, WorldState.CurrentTime);
     }
@@ -310,7 +309,6 @@ class V021YozakuraStates : StateMachineBuilder
             .ActivateOnEnter<RootArrangement>()
             .ActivateOnEnter<AccursedSeedling>()
             .ActivateOnEnter<Witherwind>()
-            // note: DriftingPetals looks up Mudrain and Witherwind on creation
             .ActivateOnEnter<WindblossomWhirl>()
             .ActivateOnEnter<LevinblossomStrike>()
             .ActivateOnEnter<Mudrain>()

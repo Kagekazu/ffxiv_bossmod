@@ -92,7 +92,6 @@ class LoomingNightmare(BossModule module) : Components.GenericChasingAOEs(module
         if (target == null)
             return;
 
-        // note: first two chases had 5 puddles, later ones 4
         var puddles = ++_chases <= 2 ? 5 : 4;
         Chasers.Add(new(_puddle, target, caster.Position, 0, puddles, Module.CastFinishAt(spell), _interval, _step));
     }

@@ -60,7 +60,6 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
         if (state != 0x00010002 || Telegraph((OID)actor.OID) is not var (originAngle, reach, facing))
             return;
         var origin = actor.Position + (actor.Rotation + originAngle).ToDirection() * reach;
-        // origins are on whole coordinates
         origin = new(MathF.Round(origin.X), MathF.Round(origin.Z));
         _sweeps.Add(new(_halfArena, origin, actor.Rotation + facing, WorldState.FutureTime(16.6f)));
     }
@@ -73,7 +72,6 @@ class IntoTheFire(BossModule module) : Components.GenericAOEs(module, AID.IntoTh
         _sweeps.RemoveAt(index >= 0 ? index : 0);
     }
 
-    // (origin direction, origin distance, sweep direction), relative to the wisp
     private static (Angle, float, Angle)? Telegraph(OID wisp) => wisp switch
     {
         OID.SmokeVisual1 => (-45.Degrees(), _diagonalReach, 90.Degrees()),

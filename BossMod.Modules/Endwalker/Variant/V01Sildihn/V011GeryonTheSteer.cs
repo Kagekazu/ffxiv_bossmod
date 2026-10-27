@@ -217,7 +217,7 @@ class SuddenlySewage(BossModule module) : Components.GenericAOEs(module, AID.Sud
 
 class RollingBoulder(BossModule module) : Components.Exaflare(module, new AOEShapeRect(10, 5))
 {
-    private static readonly WDir _halfLane = new(0, 5); // hits are centered on the helper
+    private static readonly WDir _halfLane = new(0, 5);
     private const float _stepLength = 10;
     private const int _steps = 4;
 
@@ -379,7 +379,6 @@ class V011GeryonTheSteerStates : StateMachineBuilder
     public V011GeryonTheSteerStates(BossModule module) : base(module)
     {
         TrivialPhase()
-            // note: Intake and RunawayRunoff look up PowderKegs on creation
             .ActivateOnEnter<PowderKegs>()
             .ActivateOnEnter<Intake>()
             .ActivateOnEnter<RunawaySludge>()

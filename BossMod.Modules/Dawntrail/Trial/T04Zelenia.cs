@@ -136,7 +136,7 @@ class ShockBait(BossModule module) : Components.BaitAwayIcon(module, new AOEShap
 class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
 {
     private static readonly AOEShapeCircle _shape = new(4);
-    private const int _cyclesPerPuddle = 2; // each puddle goes through Shock1-6 twice
+    private const int _cyclesPerPuddle = 2;
     private readonly List<(WPos Origin, int Cycles)> _puddles = [];
 
     public override IEnumerable<AOEInstance> ActiveAOEs(int slot, Actor actor)
@@ -164,7 +164,6 @@ class ShockPuddles(BossModule module) : Components.GenericAOEs(module)
         if (_puddles.Count == 0)
             return;
 
-        // fall back to the puddle that is furthest behind
         var index = _puddles.FindIndex(p => p.Origin.AlmostEqual(pos, 1));
         if (index < 0)
         {
@@ -269,7 +268,6 @@ class CenterVoid(BossModule module) : Components.GenericAOEs(module, AID.QueensC
     }
 }
 
-// tile k is driven by map effect 4+k and faces 180+60k degrees
 class RoseTiles(BossModule module) : BossComponent(module)
 {
     public const int NumTiles = 6;
@@ -311,7 +309,6 @@ class RoseTiles(BossModule module) : BossComponent(module)
         return group;
     }
 
-    // spawn rotations seen in logs
     private static int TileFromSpawnRotation(Angle rotation) => (int)MathF.Round(rotation.Deg) switch
     {
         180 or 143 or -143 => 0,

@@ -77,7 +77,6 @@ class ArenaShrink(BossModule module) : OuterDeathwall(module, AID.StormcloudSumm
     private const byte _mapIndex = 0x64;
     private static readonly ArenaBoundsSquare _square = new(20);
 
-    // square and circle have the same radius
     protected override bool ShouldWarn => true;
 
     public override void OnMapEffect(byte index, uint state)
@@ -249,11 +248,9 @@ class Rokujo(BossModule module) : Components.GenericAOEs(module)
         switch ((AID)spell.Action.ID)
         {
             case AID.OnceOnRokujo:
-                // ~1s between links
                 PredictChain(caster.Position, spell.Rotation, 8, Module.CastFinishAt(spell, 1), 1);
                 break;
             case AID.TwiceOnRokujo:
-                // everything after the first wave goes off together
                 PredictChain(caster.Position, spell.Rotation, 12, Module.CastFinishAt(spell, 1.6f), 1.5f, sameTimeAfterFirst: true);
                 break;
             case AID.ThriceOnRokujoVisual1:

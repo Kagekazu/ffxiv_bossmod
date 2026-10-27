@@ -323,7 +323,6 @@ class V022MokoStates : StateMachineBuilder
             .ActivateOnEnter<IronRain>()
             .ActivateOnEnter<UpwellFirst>()
             .ActivateOnEnter<UpwellRest>()
-            // note: YamaKagura looks up GhastlyGrasp on creation
             .ActivateOnEnter<Unsheathing>()
             .ActivateOnEnter<VeilSever>()
             .ActivateOnEnter<Clearout>()
