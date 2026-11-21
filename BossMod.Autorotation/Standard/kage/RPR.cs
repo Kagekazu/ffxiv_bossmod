@@ -34,7 +34,7 @@ public sealed class KageRPR(RotationModuleManager manager, Actor player) : KageS
         [Track("Gluttony", InternalName = "SoulGauge", MinLevel = 76, Action = AID.Gluttony, UiPriority = 95)]
         public Track<GluttonyStrategy> Gluttony;
 
-        [Track("Blood Stalk / Grim Swathe", MinLevel = 50, Actions = [AID.BloodStalk, AID.GrimSwathe], UiPriority = 94)]
+        [Track("Blood Stalk / Grim Swathe", MinLevel = 50, Actions = [AID.BloodStalk, AID.GrimSwathe, AID.UnveiledGibbet, AID.UnveiledGallows], UiPriority = 94)]
         public Track<BloodStalkStrategy> BloodStalk;
 
         [Track("Soul Slice / Soul Scythe", InternalName = "Slice", MinLevel = 60, Actions = [AID.SoulSlice, AID.SoulScythe], UiPriority = 93)]
@@ -432,6 +432,9 @@ public sealed class KageRPR(RotationModuleManager manager, Actor player) : KageS
 
     private void Prepull(in Strategy strategy, Enemy? target, float countdown)
     {
+        if (CircleStrat == OffensiveStrategy.Force && Unlocked(AID.ArcaneCircle) && ReadyIn(AID.ArcaneCircle) <= GCD)
+            PushOGCD(AID.ArcaneCircle, Player, 70);
+
         if (!HasSoulsow && strategy.Soulsow.Value != SoulsowStrategy.Delay)
             PushGCD(AID.Soulsow, Player, 10);
 

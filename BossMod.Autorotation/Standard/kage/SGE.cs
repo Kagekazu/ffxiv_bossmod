@@ -125,7 +125,7 @@ public sealed class KageSGE(RotationModuleManager manager, Actor player) : KageS
 
     public static RotationModuleDefinition Definition()
     {
-        return new RotationModuleDefinition("Kage SGE", "Sage", "Standard rotation (Kage)|Healers", "Kagekazu", RotationModuleQuality.Ok, BitMask.Build(Class.SGE), 100).WithStrategies<Strategy>();
+        return new RotationModuleDefinition("Kage SGE", "Sage", "Standard rotation (Kage)|Healers", "Kagekazu", RotationModuleQuality.Good, BitMask.Build(Class.SGE), 100).WithStrategies<Strategy>();
     }
 
     private int Gall;

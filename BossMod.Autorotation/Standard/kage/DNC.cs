@@ -110,7 +110,7 @@ public sealed class KageDNC(RotationModuleManager manager, Actor player) : KageS
 
     public static RotationModuleDefinition Definition()
     {
-        return new RotationModuleDefinition("Kage DNC", "Dancer", "Standard rotation (Kage)|Ranged", "Kagekazu", RotationModuleQuality.Ok, BitMask.Build(Class.DNC), 100).WithStrategies<Strategy>();
+        return new RotationModuleDefinition("Kage DNC", "Dancer", "Standard rotation (Kage)|Ranged", "Kagekazu", RotationModuleQuality.Good, BitMask.Build(Class.DNC), 100).WithStrategies<Strategy>();
     }
 
     private int Feathers;
@@ -342,7 +342,7 @@ public sealed class KageDNC(RotationModuleManager manager, Actor player) : KageS
 
         if (Esprit >= 50 && Unlocked(AID.SaberDance))
             PushGCD(DawnLeft > GCD ? AID.DanceOfTheDawn : AID.SaberDance, splash, 40);
-        if (LastDanceLeft > GCD && ShouldLastDance())
+        if (LastDanceLeft > GCD && ShouldLastDance(target))
             PushGCD(AID.LastDance, splash, 39);
         if (StarfallLeft > GCD)
             PushGCD(AID.StarfallDance, BestLineTarget ?? target.Actor, 38);
@@ -378,12 +378,13 @@ public sealed class KageDNC(RotationModuleManager manager, Actor player) : KageS
     // a Standard dance takes ~5s until the next GCD, starting it closer to Technical than that drifts Technical
     private bool StandardDelaysTechnical => Unlocked(AID.TechnicalStep) && TechnicalStrat != OffensiveStrategy.Delay && TechFinishLeft == 0 && ReadyIn(AID.TechnicalStep) < GCD + 4.5f;
 
-    private bool ShouldLastDance()
+    private bool ShouldLastDance(Enemy target)
     {
         if (TechnicalStrat == OffensiveStrategy.Delay)
             return true;
         var techIn = ReadyIn(AID.TechnicalStep);
-        return !(InBossFight && techIn is > 0 and < 20 && LastDanceLeft > techIn + GCDLength + 7);
+        // same payoff check as ShouldTechnical, otherwise last dance is held for a technical that never comes
+        return !(InBossFight && techIn is > 0 and < 20 && LastDanceLeft > techIn + GCDLength + 7 && TimeToKill.BurstWorthIt(Bossmods.ActiveModule, Hints, target.Actor, techIn + 15));
     }
 
     private bool NeedToFinish()

@@ -552,11 +552,12 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         var keracholeRegen = Player.Level >= 78; // enhanced kerachole trait
 
         // don't toggle eukrasia for an unreachable target, the dps rotation would burn it on dosis every gcd
-        void UseEukrasian(BossMod.SGE.AID heal, Actor target, int prio)
+        // a shield for a hit that lands before eukrasia's 1s gcd + application delay strands eukrasia, and the dps rotation turns it into an early dot refresh
+        void UseEukrasian(BossMod.SGE.AID heal, Actor target, int prio, float hitIn = float.MaxValue)
         {
             if (eukrasia)
                 UseGCD(heal, target, prio, instant: true);
-            else if (Player.DistanceToHitbox(target) <= 30 && target.Visibility != Visibility.Blocked)
+            else if (hitIn > GCD + 1.6f && Player.DistanceToHitbox(target) <= 30 && target.Visibility != Visibility.Blocked)
                 UseGCD(BossMod.SGE.AID.Eukrasia, Player, prio);
         }
 
@@ -583,10 +584,10 @@ public class HealerAI(RotationModuleManager manager, Actor player) : AIBase<Heal
         if (strategy.Heal == HealMode.Enabled)
         {
             if (FullRaidwideIn < GCD + 2.5f && UnshieldedShare(20) >= 0.5f)
-                UseEukrasian(BossMod.SGE.AID.Prognosis, Player, 5);
+                UseEukrasian(BossMod.SGE.AID.Prognosis, Player, 5, FullRaidwideIn);
             foreach (var (tank, busterIn) in TankbustersWithin(5))
                 if (busterIn < GCD + 2.5f && !HasGCDShield(tank))
-                    UseEukrasian(BossMod.SGE.AID.Diagnosis, tank, 4);
+                    UseEukrasian(BossMod.SGE.AID.Diagnosis, tank, 4, busterIn);
         }
 
         HealLowest(strategy, (target, ratio) =>
