@@ -31,7 +31,7 @@ public sealed class KageWHM(RotationModuleManager manager, Actor player) : KageS
         [Track("Afflatus Solace / Rapture", MinLevel = 74, Actions = [AID.AfflatusRapture, AID.AfflatusSolace], UiPriority = 95)]
         public Track<OffensiveStrategy> Lilies;
 
-        [Track("Lilies in downtime", MinLevel = 74, UiPriority = 94.5f)]
+        [Track("Lilies in downtime", MinLevel = 74, Actions = [AID.AfflatusSolace, AID.AfflatusRapture], UiPriority = 94.5f)]
         public Track<LilyDowntimeStrategy> LilyDowntime;
 
         [Track("Lucid Dreaming", MinLevel = 14, Action = ClassShared.AID.LucidDreaming, UiPriority = 94)]

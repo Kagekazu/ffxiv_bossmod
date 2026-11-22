@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace BossMod.Autorotation.kage;
 
@@ -8,31 +9,39 @@ public static class TimeToKill
     private const float Window = 15;
     private const float MinObserved = 3;
 
-    private static readonly Dictionary<ulong, Queue<(DateTime time, uint hp)>> _samples = [];
-    private static DateTime _lastUpdate;
+    private sealed class Samples
+    {
+        public readonly Dictionary<ulong, Queue<(DateTime time, uint hp)>> ByActor = [];
+        public DateTime LastUpdate;
+    }
+
+    // the replay viewer runs rotations on its own world; a single shared store let each world purge the other's actors
+    private static readonly ConditionalWeakTable<WorldState, Samples> _worlds = [];
+    private static Samples _current = new(); // Estimate reads the world rotations last passed to Update at the start of Execute
 
     public static void Update(WorldState ws, AIHints hints)
     {
-        if ((ws.CurrentTime - _lastUpdate).TotalSeconds < SampleInterval && ws.CurrentTime >= _lastUpdate)
+        var s = _current = _worlds.GetValue(ws, _ => new());
+        if ((ws.CurrentTime - s.LastUpdate).TotalSeconds < SampleInterval && ws.CurrentTime >= s.LastUpdate)
             return;
-        _lastUpdate = ws.CurrentTime;
+        s.LastUpdate = ws.CurrentTime;
 
         foreach (var e in hints.PotentialTargets)
         {
-            if (!_samples.TryGetValue(e.Actor.InstanceID, out var q))
-                _samples[e.Actor.InstanceID] = q = new();
+            if (!s.ByActor.TryGetValue(e.Actor.InstanceID, out var q))
+                s.ByActor[e.Actor.InstanceID] = q = new();
             q.Enqueue((ws.CurrentTime, e.Actor.HPMP.CurHP));
             while (q.Count > 0 && (ws.CurrentTime - q.Peek().time).TotalSeconds > Window)
                 q.Dequeue();
         }
 
-        foreach (var id in _samples.Keys.Where(id => ws.Actors.Find(id) is not { IsDead: false }).ToList())
-            _samples.Remove(id);
+        foreach (var id in s.ByActor.Keys.Where(id => ws.Actors.Find(id) is not { IsDead: false }).ToList())
+            s.ByActor.Remove(id);
     }
 
     public static float? Estimate(Actor enemy)
     {
-        if (!_samples.TryGetValue(enemy.InstanceID, out var q) || q.Count < 2)
+        if (!_current.ByActor.TryGetValue(enemy.InstanceID, out var q) || q.Count < 2)
             return null;
         var (t0, hp0) = q.Peek();
         foreach (var s in q)
@@ -41,7 +50,7 @@ public static class TimeToKill
                 break;
             (t0, hp0) = s;
         }
-        var dt = (float)(_lastUpdate - t0).TotalSeconds;
+        var dt = (float)(_current.LastUpdate - t0).TotalSeconds;
         if (dt < MinObserved)
             return null;
         var lost = (float)hp0 - enemy.HPMP.CurHP;

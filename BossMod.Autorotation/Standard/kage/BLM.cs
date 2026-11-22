@@ -28,7 +28,7 @@ public sealed class KageBLM(RotationModuleManager manager, Actor player) : KageS
         [Track("Polyglot", MinLevel = 70, Actions = [AID.Xenoglossy, AID.Foul], UiPriority = 96)]
         public Track<PolyglotStrategy> Polyglot;
 
-        [Track("Transpose / Umbral Soul", MinLevel = 4, UiPriority = 95.5f)]
+        [Track("Transpose / Umbral Soul", MinLevel = 4, Actions = [AID.Transpose, AID.UmbralSoul], UiPriority = 95.5f)]
         public Track<DowntimeStrategy> Downtime;
 
         [Track("Manaward", MinLevel = 30, Action = AID.Manaward, UiPriority = 95)]

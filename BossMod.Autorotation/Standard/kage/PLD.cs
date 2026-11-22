@@ -25,7 +25,7 @@ public sealed class KagePLD(RotationModuleManager manager, Actor player) : KageS
         [Track("Circle of Scorn / Expiacion", MinLevel = 30, Actions = [AID.CircleOfScorn, AID.SpiritsWithin, AID.Expiacion], UiPriority = 97)]
         public Track<OffensiveStrategy> Spenders;
 
-        [Track("Shield Lob / Holy Spirit", MinLevel = 15, UiPriority = 96.5f)]
+        [Track("Shield Lob / Holy Spirit", MinLevel = 15, Actions = [AID.ShieldLob, AID.HolySpirit], UiPriority = 96.5f)]
         public Track<RangedStrategy> Ranged;
         [Track("Sheltron", MinLevel = 35, Actions = [AID.Sheltron, AID.HolySheltron], UiPriority = 96)]
         public Track<SheltronStrategy> Sheltron;

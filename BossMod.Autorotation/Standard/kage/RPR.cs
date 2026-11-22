@@ -895,7 +895,7 @@ public sealed class KageRPR(RotationModuleManager manager, Actor player) : KageS
             return true;
 
         var burst = InPostBurst && !PostPerfectioCombo;
-        var normal = !Enshrouded && !SoulReaver && IdealHostLeft == 0 && !PerfectioPending && (!HasImmortal || GluttonyStrat == GluttonyStrategy.GluttonyFirst)
+        var normal = !Enshrouded && !SoulReaver && IdealHostLeft == 0 && !PerfectioPending
             && !ComboExpiring(3) && !InPostBurst;
         return (burst || normal) && TargetDDLeft > GCD + GCDLength * 2;
     }
